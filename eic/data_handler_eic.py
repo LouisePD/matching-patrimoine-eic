@@ -4,14 +4,17 @@ Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
 from format_careers import format_career_tables
+from format_individual_info import format_individual_info
 from load_data import load_data_eic
 from select_data import select_data
 
 
 def format_data(data):
     ''' Format datasets '''
-    formated_data = format_career_tables(data)
-    return formated_data
+    careers = format_career_tables(data)
+    individual_info_formated = format_individual_info(data)
+    data_formated = {'careers': careers_formated, 'individus': individual_info_formated}
+    return data_formated
 
 
 def import_data(path_data, path_storage, datasets_to_import, file_description_path):
