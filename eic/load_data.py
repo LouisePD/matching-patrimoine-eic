@@ -17,6 +17,12 @@ def clean_dta_filename(file_name):
         return file_name[:-4]
 
 
+def close_hdf():
+    for hdf5 in ['hdf5_read', 'hdf5_write', 'hdf5_append']:
+        if hdf5 in globals():
+            globals()[hdf5].close()
+
+
 def create_hdf5_eic_test(file_storage, file_storage_test):
     ''' This function select a subsample of the real dataset '''
     if isfile(file_storage_test):
@@ -104,9 +110,7 @@ def load_data_eic(path_data, path_storage=None, file_description_path=None,
         else:
             data[dataset] = hdf.select('/tables/' + dataset)
     print "Raw datasets are now loaded with the following tables: \n", data.keys()
-    for hdf5 in ['hdf5_read', 'hdf5_write', 'hdf5_append']:
-        if hdf5 in globals():
-            globals()[hdf5].close()
+    close_hdf()
     return data
 
 

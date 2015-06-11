@@ -39,4 +39,4 @@ if __name__ == '__main__':
     data = import_data(path_data, path_storage, datasets_to_import, file_description_path)
 
     t1 = time.time()
-    print '\n Time for importing data {}s.'.format('%.2f'%(t1 - t0))
+    print '\n Time for importing data {}s.'.format('%.2f' % (t1 - t0))
