@@ -42,7 +42,7 @@ def create_hdf5_eic_test(file_storage, file_storage_test):
         hdf = pd.HDFStore(file_storage)
         hdf_test = pd.HDFStore(file_storage_test, mode = "w", title = "Test file")
         for dataset in hdf.keys():
-            df = pd.DataFrame(hdf.select(dataset, where = 'noind < 113')).reset_index(drop=True)
+            df = pd.DataFrame(hdf.select(dataset, where = 'noind < 413')).reset_index(drop=True)
             hdf_test.put(dataset, df, format = 'table', data_columns = True, min_itemsize = 30)
         hdf_test.close()
         hdf.close()
@@ -114,24 +114,21 @@ def load_data_eic(path_data, path_storage=None, file_description_path=None,
     if file_description_path:
         variables_type_by_dataset = variables_to_collect(file_description,
                                                          sheets_to_import=datasets_to_import)
-        type_variables(data, variables_type_by_dataset)
+        data = type_variables(data, variables_type_by_dataset)
     return data
 
 
 def type_variables(data, type_variables_by_dataset):
     def _type(vect, vtype):
         if vtype == 'Num':
-            vect = vect.convert_objects(convert_numeric=True)
-            return vect.round(2)
+            return vect.convert_objects(convert_numeric=True).round(2)
         elif vtype == 'Str':
             return vect.astype(str)
-        elif vtype == 'Int' or vtype == 'Cat':
-            vect = vect.convert_objects(convert_numeric=True)
-            return vect.round()
+        elif vtype in ['Int', 'Cat']:
+            return vect.convert_objects(convert_numeric=True).round()
         else:
             print "Format not taken into account {}".format(vtype)
             return vect
-
     for dataset in data.keys():
         type_variables = type_variables_by_dataset[dataset]
         for var_name, var_type in type_variables.iteritems():

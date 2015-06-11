@@ -51,17 +51,18 @@ def build_sexe(data, index):
     - collected from: b100 (eventual add  with c100)
     - code: 0 = Male / 1 = female (initial code is 1/2)'''
     sexe = variable_mode_consolidate(data, 'sexi', index)
-    sexe.replace([1, 2], [0, 1])
-    return sexe.astype(int)
+    sexe = sexe.replace([1, 2], [0, 1])
+    return sexe
 
 
 def clean_civilstate_level100(x):
     ''' This function cleans civilstate statuts for 'b100' and 'c100' databases
     initial code: 1==single, 2==married, 3==widow, 4==divorced or separated,
     output code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
-    x[x == 8] = np.nan
-    x.replace([1, 2, 3, 4],
-              [2, 1, 4, 3])
+    x = x.convert_objects(convert_numeric=True).round()
+    x.loc[x == 8] = np.nan
+    x = x.replace([1, 2, 3, 4],
+                  [2, 1, 4, 3])
     return x
 
 
@@ -70,10 +71,18 @@ def clean_civilstate_etat(x):
     initial code: 1==single, 2==married, 3==widow, 4==widow, 5==divorced or separated,
     6==pacs, 7==En concubinage
     output code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
-    x[x == 9] = np.nan
-    x.replace([1, 2, 3, 4, 5, 6, 7],
-              [2, 1, 4, 4, 3, 5, 6])
+    x = x.convert_objects(convert_numeric=True).round()
+    x.loc[x == 9] = np.nan
+    x = x.replace([1, 2, 3, 4, 5, 6, 7],
+                  [2, 1, 4, 4, 3, 5, 6])
     return x
+
+
+def describe_individual_info(info_ind):
+    for c in info_ind.columns:
+        print "------------ %s -----------" % c
+        print info_ind[c].value_counts()
+    print info_ind.describe()
 
 
 def format_individual_info(data):
@@ -83,10 +92,12 @@ def format_individual_info(data):
     When incoherent information a rule of prioritarisation is defined
     Note: People we want information on = people in b100/b200. '''
     index = sorted(set(data['b100_09']['noind']))
-    columns = ['sexe', 'anaiss', 'nenf', 'civilstate', 'findet']
+    columns = ['sexe', 'anaiss', 'nenf', 'civilstate']  # , 'findet']
     info_ind = pd.DataFrame(columns = columns, index = index)
     for variable_name in columns:
         info_ind[variable_name] = eval('build_' + variable_name)(data, index)
+
+    describe_individual_info(info_ind)
     return info_ind
 
 
@@ -139,8 +150,6 @@ def variable_last_available(data, var_name_by_table):
     tables_to_concat = list()
     for table_name, table_info in var_name_by_table.iteritems():
         var_names = table_info['names']
-        print table_name, var_names
-        print data[table_name].columns
         order = table_info['order']
         table = data[table_name][['noind'] + var_names].copy()
         table.rename(columns={var_names[0]: 'variable', var_names[1]: 'year'}, inplace=True)
@@ -148,7 +157,6 @@ def variable_last_available(data, var_name_by_table):
         table = table.loc[table['variable'].notnull(), :].sort(['year'])
         table['order'] = order
         tables_to_concat += [table]
-    print tables_to_concat
     result = pd.concat(tables_to_concat).sort(['noind', 'year', 'order'], ascending=[1, 1, 0])
     result = result.drop_duplicates(['noind'], take_last = True)
     return result['variable']
