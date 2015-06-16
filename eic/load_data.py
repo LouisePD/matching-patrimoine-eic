@@ -8,6 +8,7 @@ import pandas as pd
 from pandas import read_stata
 from os import listdir, remove
 from os.path import isfile, join
+from numpy import array, unique
 
 
 def clean_dta_filename(file_name):
@@ -23,7 +24,7 @@ def close_hdf():
             globals()[hdf5].close()
 
 
-def create_hdf5_eic_test(file_storage, file_storage_test):
+def create_hdf5_eic_test(file_storage, file_storage_test, nb_indiv):
     ''' This function select a subsample of the real dataset '''
     if isfile(file_storage_test):
         hdf = pd.HDFStore(file_storage)
@@ -39,10 +40,12 @@ def create_hdf5_eic_test(file_storage, file_storage_test):
             create_hdf5_eic_test(file_storage, file_storage_test)
     else:
         "We build the corresponding hdf5 file"
+        from random import sample
         hdf = pd.HDFStore(file_storage)
         hdf_test = pd.HDFStore(file_storage_test, mode = "w", title = "Test file")
+        selected_index = sample(unique(array(hdf.select('tables/b100_09', columns = ['noind']))), nb_indiv)
         for dataset in hdf.keys():
-            df = pd.DataFrame(hdf.select(dataset, where = 'noind < 413')).reset_index(drop=True)
+            df = pd.DataFrame(hdf.select(dataset, where = 'noind=' + str(selected_index))).reset_index(drop=True)
             hdf_test.put(dataset, df, format = 'table', data_columns = True, min_itemsize = 30)
         hdf_test.close()
         hdf.close()
@@ -72,7 +75,7 @@ def create_hdf5_eic(path_data, file_storage, datasets_to_import):
 
 
 def load_data_eic(path_data, path_storage=None, file_description_path=None,
-                  datasets_to_import=None, test=False):
+                  datasets_to_import=None, test=False, nb_indiv=150):
     ''' This function loads te different stata tables, save them in a hdf5 file
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
@@ -86,9 +89,9 @@ def load_data_eic(path_data, path_storage=None, file_description_path=None,
     storage_file = path_storage + 'storage_EIC2009.h5'
     create_hdf5_eic(path_data, storage_file, datasets_to_import)
     if test:
-        print "We use a subsample of the extensive dataset"
+        print "We use a subsample of the extensive dataset with {} individuals (randomly selected)".format(nb_indiv)
         storage_test_file = path_storage + 'storage_EIC2009_test.h5'
-        create_hdf5_eic_test(storage_file, storage_test_file)
+        create_hdf5_eic_test(storage_file, storage_test_file, nb_indiv)
         hdf = pd.HDFStore(storage_test_file)
     else:
         print "We use the extensive dataset"
