@@ -78,13 +78,6 @@ def clean_civilstate_etat(x):
     return x
 
 
-def describe_individual_info(info_ind):
-    for c in info_ind.columns:
-        print "------------ %s -----------" % c
-        print info_ind[c].value_counts()
-    print info_ind.describe()
-
-
 def format_individual_info(data):
     ''' This function extracts individual information which is not time dependant
     and recorded at year 2009 from the set of EIC's databases.
@@ -96,8 +89,6 @@ def format_individual_info(data):
     info_ind = pd.DataFrame(columns = columns, index = index)
     for variable_name in columns:
         info_ind[variable_name] = eval('build_' + variable_name)(data, index)
-
-    describe_individual_info(info_ind)
     return info_ind
 
 

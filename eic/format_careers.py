@@ -31,14 +31,15 @@ def additional_rows(table_career):
         row[col_v] = values
         return row
     table = table_career.copy()
-    for i in range(4):
-        table['year_' + str(i)] = np.nan
-        table['value_' + str(i)] = np.nan
+    year_vars = ['year_{}'.format(i) for i in range(20)]
+    value_vars = ['value_{}'.format(i) for i in range(20)]
+    for year_var, value_var in zip(year_vars, value_vars):
+        table[year_var] = np.nan
+        table[value_var] = np.nan
     table = table.apply(_fill_variables, axis = 1)
-    years_vars = ['year_{}'.format(i) for i in range(4)]
-    value_vars = ['value_{}'.format(i) for i in range(4)]
-    id_vars = [var_name for var_name in table.columns if var_name not in years_vars + value_vars]
-    df_years = pd.melt(table, id_vars = id_vars, value_vars = years_vars,
+
+    id_vars = [var_name for var_name in table.columns if var_name not in year_vars + value_vars]
+    df_years = pd.melt(table, id_vars = id_vars, value_vars = year_vars,
                        var_name = 'var_year', value_name = 'year_from_melt')
     df_values = pd.melt(table, id_vars = ['noind', 'start_date'], value_vars = value_vars,
                         var_name = 'var_sal_brut', value_name = 'sal_brut_deplaf_from_melt')
@@ -73,11 +74,11 @@ def careers_to_year(table):
     for sal in ['sal_brut_deplaf', 'sal_brut_plaf']:
         career.loc[month_to_year, sal] = career.loc[month_to_year, sal] * nb_months
     career.loc[month_to_year, 'time_unit'] = 'year'
-    career.sort(['noind', 'year', 'start_date', 'end_date'], inplace = True)
     career = first_columns_career_table(career,
                             first_col= ['noind', 'year', 'start_date', 'end_date', 'cc', 'sal_brut_deplaf', 'source'])
     career = career.loc[career.time_unit == 'year', :].reset_index()
-    print career.loc[career['noind'] == 44, :]
+    career.drop(['index', 'time_unit'], axis=1, inplace=True)
+    career.sort(['noind', 'year', 'start_date', 'end_date'], inplace = True)
     return career
 
 
@@ -196,7 +197,6 @@ def yearly_value_converter(value, time_unit, start_date, end_date):
             return start_date.year, value * nb_days
         elif nb_years == 1:
             end_date1 = pd.to_datetime(str(start_date.year) + '-12-31', format="%Y-%m-%d")
-            print end_date1
             year1, value1 = yearly_value_converter(value, 'day', start_date, end_date1)
             start_date2 = end_date1 + dt.timedelta(days= 1)
             year2, value2 = yearly_value_converter(value, 'day', start_date2, end_date)

@@ -102,7 +102,7 @@ def select_individuals_fromb200(data):
 
 def select_generation(data, first_generation=1934, last_generation=2009):
     info_birth = data['b100_09'][['noind', 'an']].copy().astype(int).drop_duplicates()
-    ind_to_keep = set(info_birth.loc[(info_birth.an >= first_generation) * (info_birth.an <= last_generation), 'noind'])
+    ind_to_keep = set(info_birth.loc[(info_birth.an >= first_generation) & (info_birth.an <= last_generation), 'noind'])
     for dataset in data.keys():
         table = data[dataset]
         data[dataset] = table.loc[table['noind'].isin(ind_to_keep), :]

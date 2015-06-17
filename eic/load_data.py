@@ -128,6 +128,7 @@ def type_variables(data, type_variables_by_dataset):
         elif vtype == 'Str':
             return vect.astype(str)
         elif vtype in ['Int', 'Cat']:
+            print vtype
             return vect.convert_objects(convert_numeric=True).round()
         else:
             print "Format not taken into account {}".format(vtype)
