@@ -56,7 +56,6 @@ def format_dates_level200(table):
     table['end_date'] = table['annee'].astype(str) + '-12-31'
     table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
     table['time_unit'] = 'year'
-    #table = table.drop(['annee'], axis=1)
     return table
 
 
@@ -88,12 +87,22 @@ def select_data(data_all, file_description_path, first_year=False, last_year=Fal
     data = select_years(data, first_year, last_year)
 
     data = select_individuals_fromb200(data)
+    data = select_generation(data, first_generation=1942)
     return data
 
 
 def select_individuals_fromb200(data):
     ''' This function keeps information only for individuals who are in the b200 database '''
     ind_to_keep = set(data['b200_09']['noind'])
+    for dataset in data.keys():
+        table = data[dataset]
+        data[dataset] = table.loc[table['noind'].isin(ind_to_keep), :]
+    return data
+
+
+def select_generation(data, first_generation=1934, last_generation=2009):
+    info_birth = data['b100_09'][['noind', 'an']].copy().astype(int).drop_duplicates()
+    ind_to_keep = set(info_birth.loc[(info_birth.an >= first_generation) * (info_birth.an <= last_generation), 'noind'])
     for dataset in data.keys():
         table = data[dataset]
         data[dataset] = table.loc[table['noind'].isin(ind_to_keep), :]
