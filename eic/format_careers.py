@@ -165,12 +165,16 @@ def wages_from_b200(data_b200):
 
 def wages_from_c200(data_c200):
     ''' This function reworks on wages at the c200 level:
-    - gather information split in different variables (remuxxx) '''
+    - gather information split in different variables (remuxxx)
+    Hyp: as the cap for tranche C is very high, we consider that sal_brut_deplaf can be
+    approximate by sal_brut_plaf when missing'''
     for earning in ['remuta', 'remutb', 'remutc', 'remu', 'remutot']:
         data_c200.loc[:, earning] = clean_earning(data_c200.loc[:, earning])
     sal_tranches = data_c200[['remuta', 'remutb', 'remutc']].replace(0, np.nan).sum(1)
     sal_brut_plaf = data_c200.loc[:, 'remu'] + data_c200.loc[:, 'remu'].isnull() * sal_tranches
     sal_brut_deplaf = data_c200[['remutot']]
+    assert len(sal_brut_deplaf) == len(sal_brut_plaf)
+    sal_brut_deplaf += sal_brut_deplaf.isnull() * sal_brut_deplaf
     return sal_brut_plaf, sal_brut_deplaf
 
 
