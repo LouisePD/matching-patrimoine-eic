@@ -43,10 +43,14 @@ Temporary Items
 .apdisk
 
 #config files
-eic/config.ini
+config.ini
 
 #draft
-eic/draft_eic.py
+*draft_eic.py
+*test_til.py
+
+# Run Snake Run
+*.profile
 
 # Dirty things
 *.pyc

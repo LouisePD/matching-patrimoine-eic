@@ -1,0 +1,7 @@
+setup.cfg
+Matching_Patrimoine_Eic.egg-info/PKG-INFO
+Matching_Patrimoine_Eic.egg-info/SOURCES.txt
+Matching_Patrimoine_Eic.egg-info/dependency_links.txt
+Matching_Patrimoine_Eic.egg-info/not-zip-safe
+Matching_Patrimoine_Eic.egg-info/requires.txt
+Matching_Patrimoine_Eic.egg-info/top_level.txt

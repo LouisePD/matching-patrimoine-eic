@@ -74,8 +74,8 @@ def create_hdf5_eic(path_data, file_storage, datasets_to_import):
         hdf.close()
 
 
-def load_data_eic(path_data, path_storage=None, file_description_path=None,
-                  datasets_to_import=None, test=False, nb_indiv=150):
+def load_data(path_data, path_storage=None, hdf_name=None, file_description_path=None,
+                  datasets_to_import=None, test=False, nb_indiv=250):
     ''' This function loads te different stata tables, save them in a hdf5 file
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
@@ -86,11 +86,13 @@ def load_data_eic(path_data, path_storage=None, file_description_path=None,
         print "No list of datasets is given. We take the .dta files from the path_data directory"
         datasets_to_import = [clean_dta_filename(f) for f in listdir(path_data)
                               if isfile(join(path_data, f)) and clean_dta_filename(f)]
-    storage_file = path_storage + 'storage_EIC2009.h5'
+    if not hdf_name:
+        hdf_name = 'storage'
+    storage_file = path_storage + hdf_name + '.h5'
     create_hdf5_eic(path_data, storage_file, datasets_to_import)
     if test:
         print "We use a subsample of the extensive dataset with {} individuals (randomly selected)".format(nb_indiv)
-        storage_test_file = path_storage + 'storage_EIC2009_test.h5'
+        storage_test_file = path_storage + hdf_name + '_test.h5'
         create_hdf5_eic_test(storage_file, storage_test_file, nb_indiv)
         hdf = pd.HDFStore(storage_test_file)
     else:
@@ -128,7 +130,6 @@ def type_variables(data, type_variables_by_dataset):
         elif vtype == 'Str':
             return vect.astype(str)
         elif vtype in ['Int', 'Cat']:
-            print vtype
             return vect.convert_objects(convert_numeric=True).round()
         else:
             print "Format not taken into account {}".format(vtype)
@@ -136,12 +137,15 @@ def type_variables(data, type_variables_by_dataset):
     for dataset in data.keys():
         type_variables = type_variables_by_dataset[dataset]
         for var_name, var_type in type_variables.iteritems():
-            data[dataset][var_name] = _type(data[dataset][var_name], var_type)
+            try:
+                data[dataset][var_name] = _type(data[dataset][var_name], var_type)
+            except:
+                print dataset, var_name
     return data
 
 
 def variables_to_collect(file_description, sheets_to_import=None, info='Type', return_list=False):
-    ''' This function builds a dict of variables to import from EIC - with associated info
+    ''' This function builds a dict of variables to import from the set of tables - with associated info
     (Classe - D: demographic variables, W: work variables, P: pension variables/ Type - Cat, Num, Char/
     to_keep - list of variables to keep) - by table
     output: info_variables_by_dataset = {sheet_name : dict(var_name, var_type)}'''

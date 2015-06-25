@@ -1,0 +1,16 @@
+Metadata-Version: 1.1
+Name: Matching-Patrimoine-Eic
+Version: 0.1.dev0
+Summary: A tool for managing survey data
+Home-page: https://github.com/TaxIPP-Life
+Author: TaxIPP life team
+Author-email: UNKNOWN
+License: http://www.fsf.org/licensing/licenses/agpl-3.0.html
+Description: UNKNOWN
+Keywords: survey data
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: License :: OSI Approved :: GNU Affero General Public License v3
+Classifier: Operating System :: POSIX
+Classifier: Programming Language :: Python
+Classifier: Topic :: Scientific/Engineering :: Information Analysis
