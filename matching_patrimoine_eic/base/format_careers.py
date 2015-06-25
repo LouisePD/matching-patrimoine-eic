@@ -17,11 +17,6 @@ def aggregate_career_table(careers):
     return aggregate_table
 
 
-def benefits_from_pe(data_pe):
-    benefits = clean_earning(data_pe.loc[:, 'pjctaux'])
-    return benefits
-
-
 def additional_rows(table_career):
     def _fill_variables(row):
         years, values = yearly_value_converter(row.sal_brut_deplaf, row.time_unit, row.start_date, row.end_date)
@@ -52,6 +47,11 @@ def additional_rows(table_career):
     df.rename(columns={'sal_brut_deplaf_from_melt': 'sal_brut_deplaf', 'year_from_melt': 'year'}, inplace=True)
     df['time_unit'] = 'year'
     return df.sort(['noind', 'year', 'start_date'])
+
+
+def benefits_from_pe(data_pe):
+    benefits = clean_earning(data_pe.loc[:, 'pjctaux'])
+    return benefits
 
 
 def careers_to_year(table):
@@ -89,14 +89,17 @@ def clean_earning(vec):
     return np.round(vec, 2)
 
 
-def final_career_table(careers, time_unit='year'):
+def final_career_table(careers, time_unit='year', rule_prior=None):
     ''' This function selects information to keep from the different sources to build (workstate, sal_brut, firm).
     Workstate/sal_brut are rebuilt in 3 steps:
     - format at the appropriate time_unit level
     - selection of the most accurate information on sali for each year
     - Imputation of missing information '''
     rule_prior = {'dads_09': 1, 'etat_09': 2, 'b200_09': 3, 'c200_09': 4}
-    careers['order'] = careers['source'].copy().replace(rule_prior)
+    if rule_prior:
+        careers['order'] = careers['source'].copy().replace(rule_prior)
+    else:
+        careers['order'] = 1
     if time_unit == 'year':
         careers = careers_to_year(careers)
         return careers

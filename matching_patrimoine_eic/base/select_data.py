@@ -4,6 +4,7 @@ Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
 import datetime as dt
+import numpy as np
 import pandas as pd
 
 
@@ -11,18 +12,20 @@ def codes_regimes_to_import(file_description):
     ''' Collect codes of regimes -basic and supplementary schemes -
     to import. output: {b200_09: {acronyme_regime: code_regime}
                         c200_09: {acronyme_regime: code_regime} '''
+    tables_sheets_code = file_description.parse('association_codes_tables')
+    tables = tables_sheets_code['Table']
+    sheets_code = tables_sheets_code['Code_sheet']
     codes_regimes_to_import = dict()
-
     def _select(sheet_name):
         sheet_codes = file_description.parse(sheet_name)
         acronymes = sheet_codes.loc[sheet_codes['acronyme'] != '-', u'acronyme']
         codes_cc = sheet_codes.loc[sheet_codes['acronyme'] != '-', u'Code caisse (CC)']
         to_keep = dict(zip(acronymes, codes_cc))
         return to_keep
-    codes_regimes_to_import['b200_09'] = _select('codes_regimes_base')
-    codes_regimes_to_import['b100_09'] = codes_regimes_to_import['b200_09']
-    codes_regimes_to_import['c200_09'] = _select('codes_regimes_compl')
-    codes_regimes_to_import['c100_09'] = codes_regimes_to_import['c200_09']
+    for table, sheet_code in zip(tables, sheets_code):
+        codes = _select(sheet_code)
+        codes_regimes_to_import[table] = codes
+    print codes_regimes_to_import
     return codes_regimes_to_import
 
 
