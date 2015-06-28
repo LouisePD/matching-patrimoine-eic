@@ -129,12 +129,12 @@ def type_variables(data, type_variables_by_dataset):
     def _type(vect, vtype):
         if vtype == 'Num':
             return vect.convert_objects(convert_numeric=True).round(2)
-        elif vtype == 'Str' |  vtype == 'Alph':
+        elif vtype in ['Str', 'Alph']:
             return vect.astype(str)
         elif vtype in ['Int', 'Cat']:
             return vect.convert_objects(convert_numeric=True).round()
         else:
-            print "Format not taken into account {}".format(vtype)
+            print "Type not taken into account {}".format(vtype)
             return vect
     for dataset in data.keys():
         type_variables = type_variables_by_dataset[dataset]
@@ -142,7 +142,7 @@ def type_variables(data, type_variables_by_dataset):
             try:
                 data[dataset][var_name] = _type(data[dataset][var_name], var_type)
             except:
-                print dataset, var_name
+                print "Type {} not taken into account for {} in {}".format(var_type, var_name, dataset)
     return data
 
 
