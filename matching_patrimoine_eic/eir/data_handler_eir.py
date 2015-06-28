@@ -3,10 +3,11 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
-from format_careers import format_career_tables, aggregate_career_table, final_career_table
-from format_individual_info import format_individual_info
-from load_data import load_data_eic
-from select_data import select_data
+from format_careers_eir import format_career_tables
+from select_data_eir import select_data
+from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
+from matching_patrimoine_eic.base.format_individual_info import format_individual_info
+from matching_patrimoine_eic.base.load_data import load_data
 
 
 def format_data(data, path_storage=False, describe=False):

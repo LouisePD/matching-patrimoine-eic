@@ -5,10 +5,10 @@ Created on 18 may 2015
 '''
 
 from format_careers_eic import format_career_tables
+from select_data_eic import select_data
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
 from matching_patrimoine_eic.base.format_individual_info import format_individual_info
 from matching_patrimoine_eic.base.load_data import load_data
-from matching_patrimoine_eic.base.select_data import select_data
 from matching_patrimoine_eic.base.stat_describe_eic import describe_individual_info, describe_missing
 
 
