@@ -4,16 +4,17 @@ Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
 
-from format_careers_eic import format_career_tables
-from select_data_eic import select_data
+from format_careers_eic import format_career_tables, format_dates
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
 from matching_patrimoine_eic.base.format_individual_info import format_individual_info
 from matching_patrimoine_eic.base.load_data import load_data
+from matching_patrimoine_eic.base.select_data import select_data
 from matching_patrimoine_eic.base.stat_describe_eic import describe_individual_info, describe_missing
 
 
 def format_data(data, path_storage=False, describe=False):
     ''' Format datasets '''
+    data = format_dates(data)
     if path_storage:
         pss_path = path_storage + 'pss.xlsx'
     else:
@@ -35,9 +36,9 @@ def import_data(path_data, path_storage, datasets_to_import, file_description_pa
     ''' Main function to load EIC data and put it in the appropriate format '''
     data_raw = load_data(path_storage, path_storage, 'storageEIC_2009', file_description_path,
                          datasets_to_import, test=True, ref_table='b100_09')
-    data = select_data(data_raw, file_description_path,
-                       first_year = 1952, last_year = 2009)
-    data = format_data(data, path_storage, describe=True)
+    data = format_data(data_raw, path_storage, describe=False)
+    data = select_data(data, file_description_path, first_year = 1952, last_year = 2009)
+
     return data
 
 
