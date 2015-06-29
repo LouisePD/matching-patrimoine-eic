@@ -3,9 +3,7 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
-import datetime as dt
 import pandas as pd
-
 
 def codes_regimes_to_import(file_description):
     ''' Collect codes of regimes -basic and supplementary schemes -
@@ -28,50 +26,57 @@ def codes_regimes_to_import(file_description):
     return codes_regimes_to_import
 
 
-def format_dates_pe200(table):
-    ''' Rework on pole-emploi database dates'''
-    def _convert_stata_dates(stata_vector):
-        ''' In Stata dates are coded in number of days from 01jan1960 (=0) '''
-        initial_date = pd.to_datetime('1960-01-01', format="%Y-%m-%d")
-        dates = initial_date + stata_vector.apply((lambda x: dt.timedelta(days= int(x))))
-        return dates
-    for date_var in ['pjcdtdeb', 'pjcdtfin']:
-        table.loc[:, date_var] = _convert_stata_dates(table.loc[:, date_var])
-    table.rename(columns={'pjcdtdeb': 'start_date', 'pjcdtfin': 'end_date'}, inplace=True)
-    table['time_unit'] = 'day'
-    return table
-
-
-def format_dates_dads(table):
-    def _convert_daysofyear(x):
-        try:
-            return int(x) - 1
-        except:
-            return 0
-    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
-    table['start_date'] += table['debremu'].apply((lambda x: dt.timedelta(days=_convert_daysofyear(x))))
-    table['end_date'] = table['annee'].astype(str) + '-12-31'
-    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
-    table['time_unit'] = 'year'
-    table = table.drop(['annee', 'debremu'], axis=1)
-    return table
+def select_available_carrer(career_table, threshold = 0.95):
+    ''' This function selects individuals with known work employment status for at least threshold% of their career '''
+    pass
 
 
 def select_generation(data, first_generation=1934, last_generation=2009):
-    info_birth = data['b100_09'][['noind', 'an']].copy().astype(int).drop_duplicates()
-    ind_to_keep = set(info_birth.loc[(info_birth.an >= first_generation) & (info_birth.an <= last_generation), 'noind'])
-    for dataset in data.keys():
-        table = data[dataset]
-        data[dataset] = table.loc[table['noind'].isin(ind_to_keep), :]
+    info_birth = data['individus']['anaiss'].copy()
+    to_keep = (info_birth >= first_generation) & (info_birth <= last_generation)
+    ind_to_keep = set(info_birth.loc[to_keep].index)
+    for table in data.keys():
+        data[table] = data[table].loc[data[table]['noind'].isin(ind_to_keep), :]
     return data
 
 
-def select_regimes(data, code_regime_to_import_by_dataset):
+def select_regimes(table_career, code_regime_to_import_by_dataset):
     for dataset, regimes in code_regime_to_import_by_dataset.iteritems():
-        table = data[dataset]
-        table.loc[:, 'cc'] = table.loc[:, 'cc'].astype(int)
-        to_keep = table.loc[:, 'cc'].isin(regimes.values())
-        data[dataset] = table.loc[to_keep, :]
+        to_drop = (~table_career['cc'].astype(float).isin(regimes.values())) * (table_career['source'] == dataset)
+        table_career = table_career.loc[~to_drop, :]
         print "    Selection of regimes for dataset {}: \n {} \n".format(dataset, regimes.keys())
+    return table_career
+
+
+
+def select_data(data_all, file_description_path, first_year=False, last_year=False):
+    ''' This function selects the appropriate information from EIC
+    - selection on sources of information/regimes (keeping a subset of rows)
+    - selection on years (keeping a subset of rows)
+    TODO: - selection on generation '''
+    file_description = pd.ExcelFile(file_description_path)
+    code_regime_to_import_by_dataset = codes_regimes_to_import(file_description)
+    data_careers = data_all['careers']
+    data_careers = select_regimes(data_careers, code_regime_to_import_by_dataset)
+    data_careers = select_years(data_careers, first_year, last_year)
+    data = select_generation(data_all, first_generation=1942)
     return data
 
+
+def select_years(table_careers, first_year=False, last_year=False):
+    if not first_year and not last_year:
+        print "    No selection on years"
+        return table_careers
+    else:
+        if first_year and last_year:
+            print "    Only years between {} and {} have been selected".format(first_year, last_year)
+        if not first_year:
+            print "    Only years before {} have been selected".format(last_year)
+            first_year = 0
+        if not last_year:
+            print "    Only years after {} have been selected".format(first_year)
+            last_year = 9999
+        #table_careers = table_careers.drop_duplicates(cols=['noind', 'cc', 'start_date', 'end_year'], take_last=True)
+        to_keep = (table_careers['start_date'].apply(lambda x: x.year) >= first_year) & (table_careers['start_date'].apply(lambda x: x.year) <= last_year)
+        table_careers = table_careers.loc[to_keep, :]
+        return table_careers
