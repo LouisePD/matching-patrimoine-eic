@@ -7,7 +7,7 @@ Specific function to format EIC tables
 
 import numpy as np
 import pandas as pd
-from matching_patrimoine_eic.base.format_careers import benefits_from_pe, clean_earning
+from matching_patrimoine_eic.base.format_careers import benefits_from_pe, clean_earning, format_dates_dads, format_dates_pe200
 
 
 def format_career_dads(data_dads):
@@ -54,7 +54,27 @@ def format_career_tables(data, pss_path):
     for table_name in tables_other:
         format_table = eval('format_career_' + table_name[:-3])(data[table_name])
         format_table['source'] = table_name
+        formated_careers[table_name] = format_table.sort(['noind', 'start_date'])
     return formated_careers
+
+
+def format_dates(data):
+    ''' This function specifies Data in the appropriate format :
+    noind start_date end_date variable time_unit'''
+    data['pe200_09'] = format_dates_pe200(data['pe200_09'])
+    data['etat_09'] = format_dates_level200(data['etat_09'])
+    data['c200_09'] = format_dates_level200(data['c200_09'])
+    data['b200_09'] = format_dates_level200(data['b200_09'])
+    data['dads_09'] = format_dates_dads(data['dads_09'])
+    return data
+
+
+def format_dates_level200(table):
+    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
+    table['end_date'] = table['annee'].astype(str) + '-12-31'
+    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
+    table['time_unit'] = 'year'
+    return table
 
 
 def imputation_avpf(data_b200):
@@ -63,7 +83,7 @@ def imputation_avpf(data_b200):
     workstate_variables = ['st', 'statutp', 'cc']
     avpf_variables = ['avpf', 'ntregc', 'ntregcempl']
     avpf_b200 = data_b200[['noind', 'start_date', 'end_date', 'time_unit']
-                            + workstate_variables + avpf_variables].copy()
+                          + workstate_variables + avpf_variables].copy()
     avpf_b200 = avpf_b200.loc[(avpf_b200.avpf > 0), :]
     avpf_b200['sal_brut_deplaf'] = clean_earning(avpf_b200.loc[:, 'avpf'])
     avpf_b200['avpf_status'] = avpf_b200.ntregc - avpf_b200.ntregcempl > avpf_b200.ntregcempl

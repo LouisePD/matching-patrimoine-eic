@@ -12,6 +12,7 @@ import pandas as pd
 def aggregate_career_table(careers):
     ''' This function create an aggregate database with all the available information on careers '''
     tables_by_source = list(careers.values())
+    print careers.keys()
     aggregate_table = pd.concat(tables_by_source).sort(['noind', 'start_date', 'end_date'])
     aggregate_table = first_columns_career_table(aggregate_table)
     return aggregate_table
@@ -110,6 +111,35 @@ def first_columns_career_table(table, first_col=None):
         first_col = ['noind', 'start_date', 'end_date', 'time_unit', 'cc', 'sal_brut_deplaf']
     other_col = [col for col in table.columns if col not in first_col]
     table = table.reindex_axis(first_col + other_col, axis = 1)
+    return table
+
+
+def format_dates_pe200(table):
+    ''' Rework on pole-emploi database dates'''
+    def _convert_stata_dates(stata_vector):
+        ''' In Stata dates are coded in number of days from 01jan1960 (=0) '''
+        initial_date = pd.to_datetime('1960-01-01', format="%Y-%m-%d")
+        dates = initial_date + stata_vector.apply((lambda x: dt.timedelta(days= int(x))))
+        return dates
+    for date_var in ['pjcdtdeb', 'pjcdtfin']:
+        table.loc[:, date_var] = _convert_stata_dates(table.loc[:, date_var])
+    table.rename(columns={'pjcdtdeb': 'start_date', 'pjcdtfin': 'end_date'}, inplace=True)
+    table['time_unit'] = 'day'
+    return table
+
+
+def format_dates_dads(table):
+    def _convert_daysofyear(x):
+        try:
+            return int(x) - 1
+        except:
+            return 0
+    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
+    table['start_date'] += table['debremu'].apply((lambda x: dt.timedelta(days=_convert_daysofyear(x))))
+    table['end_date'] = table['annee'].astype(str) + '-12-31'
+    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
+    table['time_unit'] = 'year'
+    table = table.drop(['annee', 'debremu'], axis=1)
     return table
 
 

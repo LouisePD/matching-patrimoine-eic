@@ -89,6 +89,7 @@ def format_individual_info(data):
     info_ind = pd.DataFrame(columns = columns, index = index)
     for variable_name in columns:
         info_ind[variable_name] = eval('build_' + variable_name)(data, index)
+    info_ind['noind'] = info_ind.index
     return info_ind
 
 
