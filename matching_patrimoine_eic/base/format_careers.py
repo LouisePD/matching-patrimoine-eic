@@ -10,9 +10,9 @@ import pandas as pd
 
 
 def aggregate_career_table(careers):
-    ''' This function create an aggregate database with all the available information on careers '''
+    ''' This function create an aggregate database with all the available information on careers:
+    Output: 1 row per indiv*time_unit*status'''
     tables_by_source = list(careers.values())
-    print careers.keys()
     aggregate_table = pd.concat(tables_by_source).sort(['noind', 'start_date', 'end_date'])
     aggregate_table = first_columns_career_table(aggregate_table)
     return aggregate_table
@@ -63,7 +63,8 @@ def careers_to_year(table):
     day_to_year = (career['time_unit'] == 'day')
     nb_years = (end_date.apply(lambda x: x.year) - start_date.apply(lambda x: x.year))
     nb_days = (end_date - start_date) / np.timedelta64(1, 'D')
-    for sal in ['sal_brut_deplaf', 'sal_brut_plaf']:
+    variables_sal = [var for var in table.columns if var in ['sal_brut_deplaf', 'sal_brut_plaf']]
+    for sal in variables_sal:
         to_select = (day_to_year == 1) * (nb_years == 0)
         career.loc[to_select, sal] = career.loc[to_select, sal] * nb_days.loc[to_select]
     career.loc[to_select, 'time_unit'] = 'year'
@@ -72,7 +73,7 @@ def careers_to_year(table):
     # TODO: to work on if number of months exceed 12
     month_to_year = (career['time_unit'] == 'month')
     nb_months = (career.loc[month_to_year, 'end_date'] - career.loc[month_to_year, 'end_date']) / np.timedelta64(1, 'M')
-    for sal in ['sal_brut_deplaf', 'sal_brut_plaf']:
+    for sal in variables_sal:
         career.loc[month_to_year, sal] = career.loc[month_to_year, sal] * nb_months
     career.loc[month_to_year, 'time_unit'] = 'year'
     career = first_columns_career_table(career,
@@ -88,6 +89,16 @@ def clean_earning(vec):
     opposite = - vec.loc[vec < 0].copy()
     vec.loc[vec < 0] = opposite
     return np.round(vec, 2)
+
+
+def crosstable_imputation(data, initial_variable, aggregated_variable):
+    ''' To identify equivalence in categorical variable based on aggregation of an other one '''
+    crosstable = pd.crosstab(data[initial_variable], data[aggregated_variable])
+    assert crosstable.shape[1] < crosstable.shape[0]
+    assert ((crosstable != 0).sum(axis=1) == 1).all
+    equivalence_by_to_impute_cat = dict([(mode, list(crosstable[crosstable[mode] != 0].index))
+                                            for mode in crosstable.columns])
+    return equivalence_by_to_impute_cat
 
 
 def final_career_table(careers, time_unit='year', rule_prior=None):
@@ -111,6 +122,45 @@ def first_columns_career_table(table, first_col=None):
         first_col = ['noind', 'start_date', 'end_date', 'time_unit', 'cc', 'sal_brut_deplaf']
     other_col = [col for col in table.columns if col not in first_col]
     table = table.reindex_axis(first_col + other_col, axis = 1)
+    return table
+
+
+def format_career_dads(data_dads):
+    workstate_variables = ['cda', 'cs1', 'domempl', 'tain']
+    formated_dads = data_dads[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+    formated_dads['sal_brut_deplaf'] = wages_from_dads(data_dads)
+    return formated_dads
+
+
+def format_career_etat(data_etat):
+    workstate_variables = ['st', 'enreg']
+    formated_etat = data_etat[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+    formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
+    return formated_etat
+
+
+def format_career_pe200(data_pe):
+    workstate_variables = ['unemploy_status', 'pjcall2']
+    try:
+        equivalence_pjcall2_by_type_all = crosstable_imputation(data_pe, 'pjcall2', 'type_all')
+    except:
+        equivalence_pjcall2_by_type_all = {0.0: ['', 'NI'],
+                                           2.0: ['01', '02', '04', '05', '21', '22',
+                                                 '23', '24', '25', '27', '28', '40']}
+    data_pe['unemploy_status'] = np.nan
+    for mode, associated_values in equivalence_pjcall2_by_type_all.iteritems():
+        data_pe.loc[data_pe['pjcall2'].isin(associated_values), 'unemploy_status'] = mode
+        # data_pe.loc[data_pe['unemploy_status'].isnull(), 'unemploy_status'] = data_pe.loc[data_pe['unemploy_status'].isnull(), 'type_all']
+    formated_pe = data_pe[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+    formated_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
+    return formated_pe
+
+
+def format_dates_level200(table):
+    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
+    table['end_date'] = table['annee'].astype(str) + '-12-31'
+    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
+    table['time_unit'] = 'year'
     return table
 
 
@@ -141,6 +191,17 @@ def format_dates_dads(table):
     table['time_unit'] = 'year'
     table = table.drop(['annee', 'debremu'], axis=1)
     return table
+
+
+def wages_from_dads(data_dads):
+    sal_brut_deplaf = clean_earning(data_dads.loc[:, 'sb'])
+    return sal_brut_deplaf
+
+
+def wages_from_etat(data_etat):
+    data_etat.loc[:, 'brut'] = clean_earning(data_etat.loc[:, 'brut'])
+    sal_brut_deplaf = data_etat[['sbrut']]
+    return sal_brut_deplaf
 
 
 def yearly_value_converter(value, time_unit, start_date, end_date):

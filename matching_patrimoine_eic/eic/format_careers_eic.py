@@ -7,21 +7,8 @@ Specific function to format EIC tables
 
 import numpy as np
 import pandas as pd
-from matching_patrimoine_eic.base.format_careers import benefits_from_pe, clean_earning, format_dates_dads, format_dates_pe200
-
-
-def format_career_dads(data_dads):
-    workstate_variables = ['cda', 'cs1', 'domempl', 'tain']
-    formated_dads = data_dads[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
-    formated_dads['sal_brut_deplaf'] = wages_from_dads(data_dads)
-    return formated_dads
-
-
-def format_career_etat(data_etat):
-    workstate_variables = ['st', 'stag', 'enreg']
-    formated_etat = data_etat[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
-    formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
-    return formated_etat
+from matching_patrimoine_eic.base.format_careers import clean_earning, format_dates_dads, format_dates_pe200
+from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_pe200, format_dates_level200
 
 
 def format_career_l200(data_l200, level, pss):
@@ -30,13 +17,6 @@ def format_career_l200(data_l200, level, pss):
     formated_l200 = data_l200[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
     formated_l200['sal_brut_plaf'], formated_l200['sal_brut_deplaf'] = eval(wages_from)(data_l200, pss)
     return formated_l200
-
-
-def format_career_pe200(data_pe):
-    workstate_variables = ['pjcall2']
-    formated_pe = data_pe[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
-    formated_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
-    return formated_pe
 
 
 def format_career_tables(data, pss_path):
@@ -67,14 +47,6 @@ def format_dates(data):
     data['b200_09'] = format_dates_level200(data['b200_09'])
     data['dads_09'] = format_dates_dads(data['dads_09'])
     return data
-
-
-def format_dates_level200(table):
-    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
-    table['end_date'] = table['annee'].astype(str) + '-12-31'
-    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
-    table['time_unit'] = 'year'
-    return table
 
 
 def imputation_avpf(data_b200):
@@ -143,14 +115,3 @@ def wages_from_c200(data_c200, pss_by_year):
     sal_brut_deplaf = imputation_deplaf_from_plaf(sal_brut_deplaf_ini, sal_brut_plaf, years, pss_by_year, nb_pss=8)
     assert len(sal_brut_deplaf) == len(sal_brut_plaf)
     return sal_brut_plaf, sal_brut_deplaf
-
-
-def wages_from_dads(data_dads):
-    sal_brut_deplaf = clean_earning(data_dads.loc[:, 'sb'])
-    return sal_brut_deplaf
-
-
-def wages_from_etat(data_etat):
-    data_etat.loc[:, 'brut'] = clean_earning(data_etat.loc[:, 'brut'])
-    sal_brut_deplaf = data_etat[['sbrut']]
-    return sal_brut_deplaf
