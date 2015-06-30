@@ -37,7 +37,7 @@ def create_hdf5_test(file_storage, file_storage_test, nb_indiv, ref_table):
             hdf_test.close()
             hdf.close()
             remove(file_storage_test)
-            create_hdf5_test(file_storage, file_storage_test)
+            create_hdf5_test(file_storage, file_storage_test, nb_indiv, ref_table)
     else:
         "We build the corresponding hdf5 file"
         from random import sample

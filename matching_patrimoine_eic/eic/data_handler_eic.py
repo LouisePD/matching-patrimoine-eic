@@ -3,18 +3,20 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
+from os import path
 
 from format_careers_eic import format_career_tables, format_dates
+from format_individual_info_eic import format_individual_info
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
-from matching_patrimoine_eic.base.format_individual_info import format_individual_info
 from matching_patrimoine_eic.base.load_data import load_data
 from matching_patrimoine_eic.base.select_data import select_data
-from matching_patrimoine_eic.base.stat_describe_eic import describe_individual_info, describe_missing
+from matching_patrimoine_eic.base.stat_describe import describe_individual_info, describe_missing
 
 
-def format_data(data, path_storage=False, describe=False):
+def format_data(data, path_storage=False):
     ''' Format datasets '''
     data = format_dates(data)
+    individual_info_formated = format_individual_info(data)
     if path_storage:
         pss_path = path_storage + 'pss.xlsx'
     else:
@@ -23,31 +25,27 @@ def format_data(data, path_storage=False, describe=False):
     careers_formated = aggregate_career_table(careers)
     rule_prior = {'dads_09': 1, 'etat_09': 2, 'b200_09': 3, 'c200_09': 4}
     career_table = final_career_table(careers_formated, 'year', rule_prior)
-    individual_info_formated = format_individual_info(data)
     data_formated = {'careers': career_table.sort(columns=['noind', 'start_date']),
                      'individus': individual_info_formated}
-    if describe:
-        describe_individual_info(individual_info_formated)
-        describe_missing(data_formated, 'sal_brut_deplaf')
     return data_formated
 
 
-def import_data(path_data, path_storage, datasets_to_import, file_description_path):
-    ''' Main function to load EIC data and put it in the appropriate format '''
+def import_data(path_data, path_storage, datasets_to_import, file_description_path,
+                options_selection=None, test=False, describe=False):
+    ''' Main function to load EIC data and put it in the appropriate format
+    Input data: raw data available for researchers (.dta format)
+    Output: a dict containing two tables -> careers (1 row per indiv*year*status) and individus (1 row per indiv)'''
     data_raw = load_data(path_storage, path_storage, 'storageEIC_2009', file_description_path,
-                         datasets_to_import, test=True, ref_table='b100_09')
-    data = format_data(data_raw, path_storage, describe=False)
-    data = select_data(data, file_description_path, first_year = 1952, last_year = 2009)
-
+                         datasets_to_import, test=test, ref_table='b100_09')
+    data = format_data(data_raw, path_storage)
+    data = select_data(data, file_description_path, options_selection)
+    if describe:
+        describe_individual_info(data['individus'])
+        describe_missing(data, 'sal_brut_deplaf')
     return data
 
 
-if __name__ == '__main__':
-    import time
-    import ConfigParser
-    print "Début"
-    t0 = time.time()
-    from os import path
+def build_eic_data(options_selection=None):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
     config.readfp(open(config_directory + '//config.ini'))
@@ -55,7 +53,16 @@ if __name__ == '__main__':
     path_storage = config.get('EIC', 'path_storage')
     file_description_path = path_storage + config.get('EIC', 'file_description_name')
     datasets_to_import = ["b100_09", "b200_09", "c200_09", "c100_09", "dads_09", "pe200_09", "etat_09"]
-    data = import_data(path_data, path_storage, datasets_to_import, file_description_path)
+    data = import_data(path_data, path_storage, datasets_to_import, file_description_path,
+                       options_selection, test=True, describe=False)
+    return data
+
+if __name__ == '__main__':
+    import time
+    import ConfigParser
+    print "Début"
+    t0 = time.time()
+    data = build_eic_data(options_selection=dict(first_generation = 1942, last_generation = 1960))
     t1 = time.time()
     print '\n Time for importing data {}s.'.format('%.2f' % (t1 - t0))
     #import cProfile
