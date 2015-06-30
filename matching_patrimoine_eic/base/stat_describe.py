@@ -8,8 +8,9 @@ import pandas as pd
 
 def describe_individual_info(info_ind):
     for c in info_ind.columns:
-        print "------------ %s -----------" % c
-        print info_ind[c].value_counts()
+        if c not in ['noind']:
+            print "------------ %s -----------" % c
+            print info_ind[c].value_counts()
     print info_ind.describe()
 
 
@@ -34,11 +35,11 @@ def describe_missing(data, var, id_var='noind', time_var='year', time_step='year
                              'Pct. Missing': pct_missing.round(2),
                              'Pct. Missing when workstate': pct_missing2.round(2),
                              'Year of Birth': year_birth,
-                             'Nb indiv.': df.groupby([id_var])[id_var].count()})
+                             'Nb obs.': df.groupby([id_var])[id_var].count()})
 
-    mean_variables = [name for name in missing_by_ind.keys() if name not in ['Year of Birth', 'Nb indiv.']]
+    mean_variables = [name for name in missing_by_ind.keys() if name not in ['Year of Birth', 'Nb obs.']]
     missing_by_anaiss = missing_by_ind.groupby(['Year of Birth'])[mean_variables].mean().astype('f2')
-    missing_by_anaiss = missing_by_anaiss.join(missing_by_ind.groupby(['Year of Birth'])['Nb indiv.'].sum())
+    missing_by_anaiss = missing_by_anaiss.join(missing_by_ind.groupby(['Year of Birth'])['Nb obs.'].sum())
     print missing_by_anaiss
     nb_obs = df.groupby([time_var])[id_var].count()
     df['missing'] = df[var].isnull()
