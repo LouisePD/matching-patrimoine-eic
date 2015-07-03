@@ -62,7 +62,6 @@ def additional_rows(table_career, var_value):
     df.rename(columns={'value_from_melt': var_value, 'year_from_melt': 'year',
                        'end_from_melt': 'end_date', 'start_from_melt': 'start_date'}, inplace=True)
     df['time_unit'] = 'year'
-    print df.columns
     return df.sort(['noind', 'year', 'start_date'])
 
 
@@ -232,6 +231,7 @@ def regimes_by_year(table):
     for i in range(1, df['nb_obs'].max()):
         regimes_by_year['regime_by_year'] += ', ' + regimes_by_year[i].astype(str)
     regimes_by_year['regimes_by_year'] = regimes_by_year['regime_by_year'].str.replace(', nan', '')
+    regimes_by_year['regimes_by_year'] = regimes_by_year['regime_by_year'].str.replace('nan, ', '')
     regimes_by_year = regimes_by_year.reset_index()
     regimes_by_year = regimes_by_year[['noind', 'year', 'regimes_by_year']]
     table = table.merge(regimes_by_year, on=['noind', 'year'], how='left')

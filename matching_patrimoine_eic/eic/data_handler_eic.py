@@ -3,6 +3,8 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
+import ConfigParser
+
 from os import path
 
 from format_careers_eic import format_career_tables, format_dates
@@ -45,7 +47,7 @@ def import_data(path_data, path_storage, datasets_to_import, file_description_pa
     return data
 
 
-def build_eic_data(options_selection=None):
+def build_eic_data(test=False, options_selection=None):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
     config.readfp(open(config_directory + '//config.ini'))
@@ -61,10 +63,9 @@ def build_eic_data(options_selection=None):
 
 if __name__ == '__main__':
     import time
-    import ConfigParser
     print "Début"
     t0 = time.time()
-    data = build_eic_data(options_selection=dict(first_generation = 1942, last_generation = 1960))
+    data = build_eic_data(options_selection=dict(first_generation = 1942, last_generation = 1954))
     t1 = time.time()
     print '\n Time for importing data {}s.'.format('%.2f' % (t1 - t0))
     #import cProfile

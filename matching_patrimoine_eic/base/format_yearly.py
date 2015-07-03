@@ -37,8 +37,6 @@ def format_unique_year(data, datasets, option=None, table_names=None):
     data['careers_unique'] = first_columns_career_table(unique_yearly_workstate(careers, unique_yearly_sal),
         first_col = first_cols)
     assert data['careers_unique']['cadre'].notnull().any()
-    careers = careers.sort(['noind', 'year', 'sal_brut_deplaf', 'inwork_status'], ascending=[1, 1, 1, 1])
-    data['careers_draft'] = first_columns_career_table(careers, first_col= first_cols)
     return data
 
 

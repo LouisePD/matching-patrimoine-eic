@@ -32,6 +32,7 @@ def select_available_carrer(career_table, threshold = 0.95):
 
 
 def select_generation(data, first_generation, last_generation):
+    print "    Only generations between {} and {} have been selected".format(first_generation, last_generation)
     info_birth = data['individus'][['anaiss', 'noind']].copy()
     to_keep = (info_birth.anaiss >= first_generation) & (info_birth.anaiss <= last_generation)
     ind_to_keep = set(info_birth.loc[to_keep, 'noind'])

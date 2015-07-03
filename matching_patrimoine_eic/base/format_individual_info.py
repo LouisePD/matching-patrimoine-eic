@@ -88,4 +88,3 @@ def variable_last_available(data, var_name_by_table):
     result = pd.concat(tables_to_concat).sort(['noind', 'year', 'order'], ascending=[1, 1, 0])
     result = result.drop_duplicates(['noind'], take_last = True)
     return result['variable']
-
