@@ -18,35 +18,51 @@ def aggregate_career_table(careers):
     return aggregate_table
 
 
-def additional_rows(table_career):
-    def _fill_variables(row):
-        years, values = yearly_value_converter(row.sal_brut_deplaf, row.time_unit, row.start_date, row.end_date)
+def additional_rows(table_career, var_value):
+
+    def _fill_variables(row, var_value):
+        years, values, starts, ends = yearly_value_converter(row[var_value], row.time_unit,
+                                                             row.start_date, row.end_date)
         col_y = ['year_{}'.format(i) for i in range(len(years))]
         col_v = ['value_{}'.format(i) for i in range(len(years))]
+        col_s = ['start_{}'.format(i) for i in range(len(years))]
+        col_e = ['end_{}'.format(i) for i in range(len(years))]
         row[col_y] = years
         row[col_v] = values
+        row[col_s] = starts
+        row[col_e] = ends
         return row
     table = table_career.copy()
     year_vars = ['year_{}'.format(i) for i in range(20)]
     value_vars = ['value_{}'.format(i) for i in range(20)]
-    for year_var, value_var in zip(year_vars, value_vars):
-        table[year_var] = np.nan
-        table[value_var] = np.nan
-    table = table.apply(_fill_variables, axis = 1)
+    start_vars = ['start_{}'.format(i) for i in range(20)]
+    end_vars = ['end_{}'.format(i) for i in range(20)]
+    for year, value, start, end in zip(year_vars, value_vars, start_vars, end_vars):
+        table[year] = np.nan
+        table[value] = np.nan
+        table[start] = np.nan
+        table[end] = np.nan
+    table = table.apply(lambda x: _fill_variables(x, var_value), axis = 1)
 
-    id_vars = [var_name for var_name in table.columns if var_name not in year_vars + value_vars]
+    id_vars = [var_name for var_name in table.columns if var_name not in year_vars + value_vars + start_vars + end_vars]
     df_years = pd.melt(table, id_vars = id_vars, value_vars = year_vars,
                        var_name = 'var_year', value_name = 'year_from_melt')
-    df_values = pd.melt(table, id_vars = ['noind', 'start_date'], value_vars = value_vars,
-                        var_name = 'var_sal_brut', value_name = 'sal_brut_deplaf_from_melt')
-    assert (df_years['noind'] == df_values['noind']).all
-    df_values.drop(['noind', 'start_date'], inplace = True, axis=1)
-    assert df_years.shape[0] == df_values.shape[0]
-    df = pd.concat([df_years, df_values], axis=1, join_axes=[df_years.index])
-    df = df.loc[df.sal_brut_deplaf_from_melt.notnull(), :]
-    df.drop(['sal_brut_deplaf', 'year', 'var_sal_brut', 'var_year'], inplace = True, axis=1)
-    df.rename(columns={'sal_brut_deplaf_from_melt': 'sal_brut_deplaf', 'year_from_melt': 'year'}, inplace=True)
+    to_concat = [df_years]
+    for to_add in ['value', 'start', 'end']:
+        df_type = pd.melt(table, id_vars = ['noind', 'start_date'], value_vars = eval(to_add + '_vars'),
+                        var_name = 'var_' + to_add, value_name = to_add + '_from_melt')
+        assert (df_years['noind'] == df_type['noind']).all()
+        df_type.drop(['noind', 'start_date'], inplace = True, axis=1)
+        assert df_years.shape[0] == df_type.shape[0]
+        to_concat += [df_type]
+    df = pd.concat(to_concat, axis=1, join_axes=[df_years.index])
+    df = df.loc[df.value_from_melt.notnull(), :]
+    df.drop([var_value, 'year', 'start_date', 'end_date', 'var_value', 'var_year', 'var_start', 'var_end'],
+            inplace = True, axis=1)
+    df.rename(columns={'value_from_melt': var_value, 'year_from_melt': 'year',
+                       'end_from_melt': 'end_date', 'start_from_melt': 'start_date'}, inplace=True)
     df['time_unit'] = 'year'
+    print df.columns
     return df.sort(['noind', 'year', 'start_date'])
 
 
@@ -68,7 +84,7 @@ def careers_to_year(table):
         to_select = (day_to_year == 1) * (nb_years == 0)
         career.loc[to_select, sal] = career.loc[to_select, sal] * nb_days.loc[to_select]
     career.loc[to_select, 'time_unit'] = 'year'
-    to_add = additional_rows(career.loc[(day_to_year == 1) * (nb_years > 0), :])
+    to_add = additional_rows(career.loc[(day_to_year == 1) * (nb_years > 0), :], var_value = 'sal_brut_deplaf')
     career = career.append(to_add, ignore_index=True)
     # TODO: to work on if number of months exceed 12
     month_to_year = (career['time_unit'] == 'month')
@@ -79,8 +95,7 @@ def careers_to_year(table):
     career = first_columns_career_table(career,
                             first_col = ['noind', 'year', 'start_date', 'end_date', 'cc', 'sal_brut_deplaf', 'source'])
     career = career.loc[career.time_unit == 'year', :].reset_index()
-    career.drop(['index', 'time_unit'], axis=1, inplace=True)
-    career.sort(['noind', 'year', 'start_date', 'end_date'], inplace = True)
+    career.drop(['index'], axis=1, inplace=True)
     return career
 
 
@@ -101,17 +116,12 @@ def crosstable_imputation(data, initial_variable, aggregated_variable):
     return equivalence_by_to_impute_cat
 
 
-def final_career_table(careers, time_unit='year', rule_prior=None):
+def career_table_by_time_unit(careers, time_unit='year'):
     ''' This function selects information to keep from the different sources to build (workstate, sal_brut, firm).
     Workstate/sal_brut are rebuilt in 3 steps:
     - format at the appropriate time_unit level
     - selection of the most accurate information on sali for each year
     - Imputation of missing information '''
-    rule_prior = {'dads_09': 1, 'etat_09': 2, 'b200_09': 3, 'c200_09': 4}
-    if rule_prior:
-        careers['order'] = careers['source'].copy().replace(rule_prior)
-    else:
-        careers['order'] = 1
     if time_unit == 'year':
         careers = careers_to_year(careers)
         return careers
@@ -213,23 +223,33 @@ def yearly_value_converter(value, time_unit, start_date, end_date):
         nb_years = end_date.year - start_date.year
         if nb_years == 0:
             nb_days = (end_date - start_date) / np.timedelta64(1, 'D')
-            return start_date.year, value * nb_days
+            return start_date.year, value * nb_days, start_date, end_date
         elif nb_years == 1:
             end_date1 = pd.to_datetime(str(start_date.year) + '-12-31', format="%Y-%m-%d")
-            year1, value1 = yearly_value_converter(value, 'day', start_date, end_date1)
+            year1, value1, start_date1, end_date1 = yearly_value_converter(value, 'day', start_date, end_date1)
             start_date2 = end_date1 + dt.timedelta(days= 1)
-            year2, value2 = yearly_value_converter(value, 'day', start_date2, end_date)
-            return [year1, year2], [value1, value2]
+            year2, value2, start_date2, end_date2 = yearly_value_converter(value, 'day', start_date2, end_date)
+            start_dates = [start_date1, start_date2]
+            end_dates = [end_date1, end_date2]
+            return [year1, year2], [value1, value2], start_dates, end_dates
         else:
             end_date1 = pd.to_datetime(str(start_date.year) + '-12-31', format="%Y-%m-%d")
-            year1, value1 = yearly_value_converter(value, 'day', start_date, end_date1)
+            year1, value1, start_date1, end_date1 = yearly_value_converter(value, 'day', start_date, end_date1)
             years = [year1]
             values = [value1]
+            start_dates = [start_date1]
+            end_dates = [end_date1]
             for year in range(start_date.year + 1, end_date.year):
                 years += [year]
                 values += [365 * value]
+                start_dates += [pd.to_datetime(str(year) + '-01-01', format="%Y-%m-%d")]
+                end_dates += [pd.to_datetime(str(year) + '-12-31', format="%Y-%m-%d")]
             start_datef = pd.to_datetime(str(end_date.year) + '-01-01', format="%Y-%m-%d")
-            yearf, valuef = yearly_value_converter(value, 'day', start_datef, end_date)
+            yearf, valuef, start_datef, end_datef = yearly_value_converter(value, 'day', start_datef, end_date)
             years += [yearf]
             values += [valuef]
-            return years, values
+            start_dates += [start_datef]
+            end_dates += [end_datef]
+            return years, values, start_dates, end_dates
+
+
