@@ -15,15 +15,12 @@ def build_sbrut(table_etat):
     return sbrut
 
 
-def format_career_tables(data):
+def format_career_tables(data, datasets):
     formated_careers = dict()
     # 7000 = Pole Emploi, 8000 = Dads, 9001 = Etat
-    fct_equivalent_by_table = {"eir2008_8000": 'dads', "eir2008_7000": 'pe200', "eir2008_9001": 'etat'}
-    tables = dict([(table, 'format_career_' + fct)
-                for table, fct in fct_equivalent_by_table.iteritems()
-                if table in data.keys()])
-    for table_name, fct in tables.iteritems():
-        format_table = eval(fct)(data[table_name])
+    to_format = dict((k, v) for k, v in datasets.iteritems() if k in ['unemployment', 'dads', 'etat'])
+    for generic_name, table_name in to_format.iteritems():
+        format_table = eval('format_career_' + generic_name)(data[table_name])
         format_table['source'] = table_name
         formated_careers[table_name] = format_table.sort(['noind', 'start_date'])
     return formated_careers

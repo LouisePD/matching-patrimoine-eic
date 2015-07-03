@@ -44,7 +44,11 @@ def format_career_tables(data, pss_path):
     formated_careers['b200_09'] = pd.concat([formated_careers['b200_09'], imputed_avpf_b200])
     tables_other = [table for table in ['dads_09', 'etat_09', 'pe200_09'] if table in data.keys()]
     for table_name in tables_other:
-        format_table = eval('format_career_' + table_name[:-3])(data[table_name])
+        if table_name == 'pe200_09':
+            fct = 'format_career_unemployment'
+        else:
+            fct = 'format_career_' + table_name[:-3]
+        format_table = eval(fct)(data[table_name])
         format_table['source'] = table_name
         formated_careers[table_name] = format_table.sort(['noind', 'start_date'])
     return formated_careers

@@ -82,6 +82,7 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
     Output: dict(dataset_name = pandas tables)'''
+    datasets_to_import = [table for table in datasets_to_import.values()]
     if not path_storage:
         path_storage = path_data
     if not datasets_to_import:

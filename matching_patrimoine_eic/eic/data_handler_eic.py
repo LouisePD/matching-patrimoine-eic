@@ -49,13 +49,14 @@ def build_eic_data(options_selection=None):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
     config.readfp(open(config_directory + '//config.ini'))
-    path_data = config.get('EIC', 'path_data')
-    path_storage = config.get('EIC', 'path_storage')
-    file_description_path = path_storage + config.get('EIC', 'file_description_name')
-    datasets_to_import = ["b100_09", "b200_09", "c200_09", "c100_09", "dads_09", "pe200_09", "etat_09"]
-    data = import_data(path_data, path_storage, datasets_to_import, file_description_path,
+    all_options = dict(config.items('EIC'))
+    path_data = all_options.get('path_data')
+    path_storage = all_options.get('path_storage')
+    file_description_path = path_storage + all_options.get('file_description_name')
+    datasets = dict([(generic[:-6], name) for generic, name in all_options.iteritems() if generic[-5:] == 'table'])
+    data = import_data(path_data, path_storage, datasets, file_description_path,
                        options_selection, test=True, describe=False)
-    data = format_unique_year(data, option={'complementary': True})
+    data = format_unique_year(data, datasets, option={'complementary': True})
     return data
 
 if __name__ == '__main__':

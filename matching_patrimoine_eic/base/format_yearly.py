@@ -13,16 +13,16 @@ def cumsum_na(x):
     return np.cumsum(x[~x.isnull()])
 
 
-def format_unique_year(data, option=None):
+def format_unique_year(data, datasets, option=None, table_names=None):
     ''' To obtain only one workstate status/ wage per year. Selection is perfomed based on the following steps:
     1- basic scheme with only additional/previously missing information updated if complementary schemes exist
     2- higher reported wage selected...
     3- ... associated workstate'''
     careers = data['careers'].copy()
-    careers = unique_yearly_pe(careers, 'pe200_09')
-    careers = unique_yearly_dads(careers, 'dads_09')
+    careers = unique_yearly_unemployment(careers, datasets['unemployment'])
+    careers = unique_yearly_dads(careers, datasets['dads'])
     assert careers['cadre'].notnull().any()
-    if 'complementary' in option.keys() and option['complementary']:
+    if option and 'complementary' in option.keys() and option['complementary']:
         careers = unique_yearly_b200(careers)
         assert not(careers.duplicated(['noind', 'source', 'year'])).all()
         careers = update_basic_with_complementary(careers)
@@ -31,7 +31,6 @@ def format_unique_year(data, option=None):
         assert careers['cadre'].notnull().any()
     else:
         assert not(careers.duplicated(['noind', 'source', 'year'])).all()
-
     unique_yearly_sal = unique_yearly_salbrut(careers)
     first_cols = ['noind', 'year', 'start_date', 'source', 'cc',
                   'sal_brut_deplaf', 'salbrut', 'source_salbrut', 'inwork_status', 'unemploy_status']
@@ -123,8 +122,8 @@ def unique_yearly_salbrut(table):
     df['year'] = df['year'].astype(int)
     assert not(df.duplicated(['noind', 'year', 'source'])).all()
     df['sal_brut_deplaf'] = df['sal_brut_deplaf'].fillna(-1)
-    dfs = df[['noind', 'year', 'source', 'sal_brut_deplaf']].set_index(['noind', 'year', 'source']).unstack('source')
-    dfs['salbrut'] = dfs.max(axis=1)
+    dfs = df[['noind', 'year', 'source', 'sal_brut_deplaf']].drop_duplicates(['noind', 'year', 'source']).set_index(['noind', 'year', 'source']).unstack('source')
+    dfs['salbrut'] = dfs.max(axis=1).replace(-1, np.nan)
     columns = [col[0] + '_' + col[1] for col in dfs.columns if col[0] != 'salbrut']
     dfs.columns = columns + ['salbrut']
     dfs = dfs.reset_index()
