@@ -112,7 +112,7 @@ def crosstable_imputation(data, initial_variable, aggregated_variable):
     assert crosstable.shape[1] < crosstable.shape[0]
     assert ((crosstable != 0).sum(axis=1) == 1).all
     equivalence_by_to_impute_cat = dict([(mode, list(crosstable[crosstable[mode] != 0].index))
-                                            for mode in crosstable.columns])
+                                        for mode in crosstable.columns])
     return equivalence_by_to_impute_cat
 
 
@@ -124,6 +124,7 @@ def career_table_by_time_unit(careers, time_unit='year'):
     - Imputation of missing information '''
     if time_unit == 'year':
         careers = careers_to_year(careers)
+        careers = regimes_by_year(careers)
         return careers
 
 
@@ -136,16 +137,32 @@ def first_columns_career_table(table, first_col=None):
 
 
 def format_career_dads(data_dads):
-    workstate_variables = ['cda', 'cs1', 'domempl', 'tain']
+    workstate_variables = ['cda', 'cs1', 'domempl', 'tain', 'ce']
     formated_dads = data_dads[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
     formated_dads['sal_brut_deplaf'] = wages_from_dads(data_dads)
+    for var in ['full_time', 'unemploy_status', 'inwork_status']:
+        formated_dads[var] = np.nan
+    formated_dads['inwork_status'] = True
+    # A: We assume full-time position if missing
+    formated_dads['full_time'] = formated_dads['ce'].isin(['P', 'D', ''])
+    formated_dads['cs1'] = formated_dads['cs1'].astype(float)
+    formated_dads['cadre'] = formated_dads['cda'].isin(['C']) | formated_dads['cs1'].isin([3.0, 4.0])
+    formated_dads.drop(workstate_variables, 1, inplace=True)
     return formated_dads
 
 
 def format_career_etat(data_etat):
-    workstate_variables = ['st', 'enreg']
+    workstate_variables = ['enreg', 'quot', 'ce']
     formated_etat = data_etat[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+    formated_etat['quot'] = formated_etat['quot'].astype(float)
     formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
+    for var in ['full_time', 'unemploy_status', 'inwork_status']:
+        formated_etat[var] = np.nan
+    formated_etat.loc[formated_etat['quot'].notnull(), 'full_time'] = formated_etat.loc[formated_etat['quot'].notnull(), 'quot'].isin([0])
+    formated_etat.loc[formated_etat['ce'] == 5, 'unemploy_status'] = 2  # chomage indemnisé
+    formated_etat.loc[formated_etat['ce'].isin([2, 3, 4]), 'inwork_status'] = True
+    formated_etat.loc[formated_etat['ce'].isin([0, 1, 5, 6]), 'inwork_status'] = False
+    formated_etat.drop(workstate_variables, 1, inplace=True)
     return formated_etat
 
 
@@ -158,9 +175,10 @@ def format_career_pe200(data_pe):
                                            2.0: ['01', '02', '04', '05', '21', '22',
                                                  '23', '24', '25', '27', '28', '40']}
     data_pe['unemploy_status'] = np.nan
+    for var in ['full_time', 'unemploy_status', 'inwork_status']:
+        data_pe[var] = False
     for mode, associated_values in equivalence_pjcall2_by_type_all.iteritems():
         data_pe.loc[data_pe['pjcall2'].isin(associated_values), 'unemploy_status'] = mode
-        # data_pe.loc[data_pe['unemploy_status'].isnull(), 'unemploy_status'] = data_pe.loc[data_pe['unemploy_status'].isnull(), 'type_all']
     formated_pe = data_pe[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
     formated_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
     return formated_pe
