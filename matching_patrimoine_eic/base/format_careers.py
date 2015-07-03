@@ -166,6 +166,21 @@ def format_career_pe200(data_pe):
     return formated_pe
 
 
+def format_dates_dads(table):
+    def _convert_daysofyear(x):
+        try:
+            return int(x) - 1
+        except:
+            return 0
+    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
+    table['start_date'] += table['debremu'].apply((lambda x: dt.timedelta(days=_convert_daysofyear(x))))
+    table['end_date'] = table['annee'].astype(str) + '-12-31'
+    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
+    table['time_unit'] = 'year'
+    table = table.drop(['annee', 'debremu'], axis=1)
+    return table
+
+
 def format_dates_level200(table):
     table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
     table['end_date'] = table['annee'].astype(str) + '-12-31'
@@ -188,18 +203,6 @@ def format_dates_pe200(table):
     return table
 
 
-def format_dates_dads(table):
-    def _convert_daysofyear(x):
-        try:
-            return int(x) - 1
-        except:
-            return 0
-    table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
-    table['start_date'] += table['debremu'].apply((lambda x: dt.timedelta(days=_convert_daysofyear(x))))
-    table['end_date'] = table['annee'].astype(str) + '-12-31'
-    table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
-    table['time_unit'] = 'year'
-    table = table.drop(['annee', 'debremu'], axis=1)
 def regimes_by_year(table):
     df = table.copy()
     df['helper'] = 1
