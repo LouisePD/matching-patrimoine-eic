@@ -85,7 +85,7 @@ def unique_yearly_dads(table, dads_table_name):
     return pd.concat([not_dads, dads], ignore_index=True)
 
 
-def unique_yearly_pe(table, unemploy_table_name):
+def unique_yearly_unemployment(table, unemploy_table_name):
     ''' Return the most appropriate state when several unemployment benefits status for the same year.
     Note: several informations for a given year are due to information given on a daily base in the unemployment data
     Selection rule: groupby status and keep the longest period.'''

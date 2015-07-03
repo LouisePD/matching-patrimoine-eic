@@ -166,7 +166,7 @@ def format_career_etat(data_etat):
     return formated_etat
 
 
-def format_career_pe200(data_pe):
+def format_career_unemployment(data_pe):
     workstate_variables = ['unemploy_status', 'pjcall2']
     try:
         equivalence_pjcall2_by_type_all = crosstable_imputation(data_pe, 'pjcall2', 'type_all')
@@ -207,7 +207,7 @@ def format_dates_level200(table):
     return table
 
 
-def format_dates_pe200(table):
+def format_dates_unemployment(table):
     ''' Rework on pole-emploi database dates'''
     def _convert_stata_dates(stata_vector):
         ''' In Stata dates are coded in number of days from 01jan1960 (=0) '''

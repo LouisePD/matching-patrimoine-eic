@@ -5,8 +5,8 @@ Specific function to format EIR tables
 @author: l.pauldelvaux
 """
 
-from matching_patrimoine_eic.base.format_careers import format_dates_dads, format_dates_pe200, format_dates_level200
-from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_pe200
+from matching_patrimoine_eic.base.format_careers import format_dates_dads, format_dates_unemployment, format_dates_level200
+from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_unemployment
 
 
 def build_sbrut(table_etat):
@@ -32,7 +32,7 @@ def format_career_tables(data):
 def format_dates(data):
     ''' This function specifies Data in the appropriate format :
     noind start_date end_date variable(s) time_unit'''
-    data['eir2008_7000'] = format_dates_pe200(data['eir2008_7000'])
+    data['eir2008_7000'] = format_dates_unemployment(data['eir2008_7000'])
     data['eir2008_9001'] = format_dates_level200(data['eir2008_9001'])
     data['eir2008_8000'] = format_dates_dads(data['eir2008_8000'])
     return data

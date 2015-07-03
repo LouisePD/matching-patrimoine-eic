@@ -7,8 +7,8 @@ Specific function to format EIC tables
 
 import numpy as np
 import pandas as pd
-from matching_patrimoine_eic.base.format_careers import clean_earning, format_dates_dads, format_dates_pe200
-from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_pe200, format_dates_level200
+from matching_patrimoine_eic.base.format_careers import clean_earning, format_dates_dads, format_dates_unemployment
+from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_unemployment, format_dates_level200
 
 
 def format_career_l200(data_l200, level, pss):
@@ -53,7 +53,7 @@ def format_career_tables(data, pss_path):
 def format_dates(data):
     ''' This function specifies Data in the appropriate format :
     noind start_date end_date variable time_unit'''
-    data['pe200_09'] = format_dates_pe200(data['pe200_09'])
+    data['pe200_09'] = format_dates_unemployment(data['pe200_09'])
     data['etat_09'] = format_dates_level200(data['etat_09'])
     data['c200_09'] = format_dates_level200(data['c200_09'])
     data['b200_09'] = format_dates_level200(data['b200_09'])
