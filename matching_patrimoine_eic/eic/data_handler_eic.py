@@ -8,6 +8,7 @@ from os import path
 from format_careers_eic import format_career_tables, format_dates
 from format_individual_info_eic import format_individual_info
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
+from matching_patrimoine_eic.base.format_yearly import format_unique_year
 from matching_patrimoine_eic.base.load_data import load_data
 from matching_patrimoine_eic.base.select_data import select_data
 from matching_patrimoine_eic.base.stat_describe import describe_individual_info, describe_missing
@@ -55,6 +56,7 @@ def build_eic_data(options_selection=None):
     datasets_to_import = ["b100_09", "b200_09", "c200_09", "c100_09", "dads_09", "pe200_09", "etat_09"]
     data = import_data(path_data, path_storage, datasets_to_import, file_description_path,
                        options_selection, test=True, describe=False)
+    data = format_unique_year(data, option={'complementary': True})
     return data
 
 if __name__ == '__main__':
