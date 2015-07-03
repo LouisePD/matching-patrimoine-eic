@@ -7,14 +7,14 @@ from os import path
 
 from format_careers_eic import format_career_tables, format_dates
 from format_individual_info_eic import format_individual_info
-from matching_patrimoine_eic.base.format_careers import aggregate_career_table, final_career_table
+from matching_patrimoine_eic.base.format_careers import aggregate_career_table, career_table_by_time_unit
 from matching_patrimoine_eic.base.format_yearly import format_unique_year
 from matching_patrimoine_eic.base.load_data import load_data
 from matching_patrimoine_eic.base.select_data import select_data
 from matching_patrimoine_eic.base.stat_describe import describe_individual_info, describe_missing
 
 
-def format_data(data, path_storage=False):
+def format_data(data, time_unit='year', path_storage=False):
     ''' Format datasets '''
     data = format_dates(data)
     individual_info_formated = format_individual_info(data)
@@ -24,8 +24,7 @@ def format_data(data, path_storage=False):
         pss_path = False
     careers = format_career_tables(data, pss_path)
     careers_formated = aggregate_career_table(careers)
-    rule_prior = {'dads_09': 1, 'etat_09': 2, 'b200_09': 3, 'c200_09': 4}
-    career_table = final_career_table(careers_formated, 'year', rule_prior)
+    career_table = career_table_by_time_unit(careers_formated, time_unit)
     data_formated = {'careers': career_table.sort(columns=['noind', 'start_date']),
                      'individus': individual_info_formated}
     return data_formated
@@ -38,7 +37,7 @@ def import_data(path_data, path_storage, datasets_to_import, file_description_pa
     Output: a dict containing two tables -> careers (1 row per indiv*year*status) and individus (1 row per indiv)'''
     data_raw = load_data(path_storage, path_storage, 'storageEIC_2009', file_description_path,
                          datasets_to_import, test=test, ref_table='b100_09')
-    data = format_data(data_raw, path_storage)
+    data = format_data(data_raw, time_unit='year', path_storage=path_storage)
     data = select_data(data, file_description_path, options_selection)
     if describe:
         describe_individual_info(data['individus'])

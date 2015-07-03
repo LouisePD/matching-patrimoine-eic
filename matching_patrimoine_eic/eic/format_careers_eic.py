@@ -12,10 +12,22 @@ from matching_patrimoine_eic.base.format_careers import format_career_dads, form
 
 
 def format_career_l200(data_l200, level, pss):
+    assert data_l200['cc'].notnull().all()
     wages_from = 'wages_from_' + level
-    workstate_variables = ['st', 'statutp', 'cc']
-    formated_l200 = data_l200[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+    workstate_variables = ['st', 'statutp', 'ntpc', 'quotite']
+    formated_l200 = data_l200[['noind', 'start_date', 'end_date', 'time_unit', 'cc'] + workstate_variables].copy()
     formated_l200['sal_brut_plaf'], formated_l200['sal_brut_deplaf'] = eval(wages_from)(data_l200, pss)
+    for var in ['full_time', 'unemploy_status', 'inwork_status', 'cadre']:
+        formated_l200[var] = np.nan
+    formated_l200['inwork_status'] = True
+    cond_notworking = (formated_l200['ntpc'] == 0) | (formated_l200['statutp'].isin([2, 3]))
+    formated_l200.loc[cond_notworking, 'inwork_status'] = False
+    cond_fulltime = (formated_l200['quotite'] == 0)
+    formated_l200.loc[cond_fulltime, 'full_time'] = True
+    formated_l200.loc[~cond_fulltime & formated_l200['quotite'].notnull(), 'full_time'] = False
+    # TODO: Deal with cadre/noncadre
+    formated_l200.drop(workstate_variables, 1, inplace=True)
+    assert formated_l200['cc'].notnull().all()
     return formated_l200
 
 
@@ -59,7 +71,7 @@ def imputation_avpf(data_b200):
     avpf_b200 = avpf_b200.loc[(avpf_b200.avpf > 0), :]
     avpf_b200['sal_brut_deplaf'] = clean_earning(avpf_b200.loc[:, 'avpf'])
     avpf_b200['avpf_status'] = avpf_b200.ntregc - avpf_b200.ntregcempl > avpf_b200.ntregcempl
-    avpf_b200.drop(avpf_variables, axis=1, inplace=True)
+    avpf_b200.drop(avpf_variables + workstate_variables, axis=1, inplace=True)
     avpf_b200['source'] = 'b200_09_avpf'
     return avpf_b200
 
@@ -70,7 +82,8 @@ def imputation_deplaf_from_plaf(sal_brut_deplaf, sal_brut_plaf, years, pss_by_ye
     pss_threshold = years.merge(pss_by_year, how='left', on=['year'])['pss'] * nb_pss
     nb_miss_ini = sum(sal_brut_deplaf.isnull())
     assert len(sal_brut_deplaf) == len(sal_brut_plaf) == len(pss_threshold)
-    condition_imputation = ((sal_brut_plaf <= pss_threshold + 10) * (sal_brut_deplaf.isnull())).astype(int)
+    condition_imputation = ((sal_brut_plaf <= pss_threshold + 13) * (sal_brut_deplaf.isnull() |
+                            (sal_brut_deplaf == 0) * (~(sal_brut_plaf.isnull())))).astype(int)
     helper = pd.DataFrame({'to be imputed': sal_brut_deplaf, 'to impute': sal_brut_plaf * condition_imputation})
     sal_brut_deplaf = helper.sum(axis=1)
     assert len(sal_brut_deplaf) == len(sal_brut_plaf)
