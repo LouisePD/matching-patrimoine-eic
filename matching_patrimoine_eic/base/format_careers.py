@@ -200,6 +200,20 @@ def format_dates_dads(table):
     table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
     table['time_unit'] = 'year'
     table = table.drop(['annee', 'debremu'], axis=1)
+def regimes_by_year(table):
+    df = table.copy()
+    df['helper'] = 1
+    df['nb_obs'] = df.groupby(['noind', 'year'])['helper'].transform(np.cumsum)
+    df.drop('helper', 1, inplace=True)
+    regimes_by_year = df[['noind', 'year', 'cc', 'nb_obs']].set_index(['noind', 'year', 'nb_obs']).unstack('nb_obs')
+    regimes_by_year.columns = range(df['nb_obs'].max())
+    regimes_by_year['regime_by_year'] = regimes_by_year[0].astype(str)
+    for i in range(1, df['nb_obs'].max()):
+        regimes_by_year['regime_by_year'] += ', ' + regimes_by_year[i].astype(str)
+    regimes_by_year['regimes_by_year'] = regimes_by_year['regime_by_year'].str.replace(', nan', '')
+    regimes_by_year = regimes_by_year.reset_index()
+    regimes_by_year = regimes_by_year[['noind', 'year', 'regimes_by_year']]
+    table = table.merge(regimes_by_year, on=['noind', 'year'], how='left')
     return table
 
 
