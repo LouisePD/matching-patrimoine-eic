@@ -26,9 +26,22 @@ def codes_regimes_to_import(file_description):
     return codes_regimes_to_import
 
 
-def select_available_carrer(career_table, threshold = 0.95):
-    ''' This function selects individuals with known work employment status for at least threshold% of their career '''
-    pass
+def select_complete_career(data, target_var=None, time_var=None, id_var='noind',
+                           thresholds = {'nb_years_min': 25, 'missing_wages': 0.05}):
+    ''' This function selects individuals with missing work employment status Throughout their career below a threshold
+    Note: As selection is based on assumed workstate definitionsg, it can not be included as a step of select_data'''
+    df = data['careers'].copy()
+    nb_time_by_indiv = df.groupby([id_var])[time_var].count()
+    df['missing'] = df[target_var].isnull()
+    pct_missing = df.groupby([id_var])['missing'].sum() / nb_time_by_indiv
+    to_keep = (nb_time_by_indiv >= thresholds['nb_years_min']) * (pct_missing <= thresholds['missing_wages'])
+    indiv_to_keep = list(set(to_keep[to_keep == True].index))
+    for table in data.keys():
+        df = data[table]
+        data[table] = df.loc[df['noind'].isin(indiv_to_keep), :]
+    data['selection'] = pd.DataFrame({'nb_times': nb_time_by_indiv, 'missing': pct_missing, 'select': to_keep})
+    data['individus']['nb_obs_career'] = nb_time_by_indiv
+    return data
 
 
 def select_generation(data, first_generation, last_generation):
