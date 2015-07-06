@@ -151,35 +151,39 @@ def format_career_dads(data_dads):
 
 
 def format_career_etat(data_etat):
-    workstate_variables = ['enreg', 'quot', 'ce']
+    print data_etat.columns
+    workstate_variables = ['enreg', 'quot', 'ce', 'rss']
     formated_etat = data_etat[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
     formated_etat['quot'] = formated_etat['quot'].astype(float)
     formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
-    for var in ['full_time', 'unemploy_status', 'inwork_status']:
+    for var in ['full_time', 'unemploy_status', 'inwork_status', 'fp_actif']:
         formated_etat[var] = np.nan
-    formated_etat.loc[formated_etat['quot'].notnull(), 'full_time'] = formated_etat.loc[formated_etat['quot'].notnull(), 'quot'].isin([0])
+    cond = formated_etat['quot'].notnull()
+    formated_etat.loc[cond, 'full_time'] = formated_etat.loc[cond, 'quot'].isin([0])
     formated_etat.loc[formated_etat['ce'] == 5, 'unemploy_status'] = 2  # chomage indemnisé
     formated_etat.loc[formated_etat['ce'].isin([2, 3, 4]), 'inwork_status'] = True
     formated_etat.loc[formated_etat['ce'].isin([0, 1, 5, 6]), 'inwork_status'] = False
+    formated_etat.loc[formated_etat['rss'] == 8, 'fp_actif'] = True
     formated_etat.drop(workstate_variables, 1, inplace=True)
     return formated_etat
 
 
 def format_career_unemployment(data_pe):
-    workstate_variables = ['unemploy_status', 'pjcall2']
-    try:
-        equivalence_pjcall2_by_type_all = crosstable_imputation(data_pe, 'pjcall2', 'type_all')
-    except:
-        equivalence_pjcall2_by_type_all = {0.0: ['', 'NI'],
-                                           2.0: ['01', '02', '04', '05', '21', '22',
-                                                 '23', '24', '25', '27', '28', '40']}
-    data_pe['unemploy_status'] = np.nan
+    workstate_variables = ['unemploy_status', 'pjcall2', 'full_time', 'inwork_status']
+    # try:
+    #    equivalence_pjcall2_by_type_all = crosstable_imputation(data_pe, 'pjcall2', 'type_all')
+    # except:
+    equivalence_pjcall2_by_type_all = {0.0: ['', 'NI'],
+                                       2.0: ['01', '02', '04', '05', '21', '22', '33', '54', '82', '18', '47',
+                                             '23', '24', '25', '27', '28', '40', '43']}
+
     for var in ['full_time', 'unemploy_status', 'inwork_status']:
-        data_pe[var] = False
+        data_pe[var] = np.nan
     for mode, associated_values in equivalence_pjcall2_by_type_all.iteritems():
         data_pe.loc[data_pe['pjcall2'].isin(associated_values), 'unemploy_status'] = mode
     formated_pe = data_pe[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
     formated_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
+    formated_pe['inwork_status'] = False
     return formated_pe
 
 
@@ -220,22 +224,45 @@ def format_dates_unemployment(table):
     return table
 
 
-def regimes_by_year(table):
+def variable_by_year(table, target_var, name_output_var):
+    ''' Creates a variable recording a list of values for a given year*indiv '''
     df = table.copy()
     df['helper'] = 1
     df['nb_obs'] = df.groupby(['noind', 'year'])['helper'].transform(np.cumsum)
     df.drop('helper', 1, inplace=True)
-    regimes_by_year = df[['noind', 'year', 'cc', 'nb_obs']].set_index(['noind', 'year', 'nb_obs']).unstack('nb_obs')
-    regimes_by_year.columns = range(df['nb_obs'].max())
-    regimes_by_year['regime_by_year'] = regimes_by_year[0].astype(str)
+    var_by_year = df[['noind', 'year', 'nb_obs', target_var]].set_index(['noind', 'year', 'nb_obs']).unstack('nb_obs')
+    var_by_year.columns = range(df['nb_obs'].max())
+    var_by_year[name_output_var] = var_by_year[0].astype(str)
     for i in range(1, df['nb_obs'].max()):
-        regimes_by_year['regime_by_year'] += ', ' + regimes_by_year[i].astype(str)
-    regimes_by_year['regimes_by_year'] = regimes_by_year['regime_by_year'].str.replace(', nan', '')
-    regimes_by_year['regimes_by_year'] = regimes_by_year['regime_by_year'].str.replace('nan, ', '')
-    regimes_by_year = regimes_by_year.reset_index()
-    regimes_by_year = regimes_by_year[['noind', 'year', 'regimes_by_year']]
-    table = table.merge(regimes_by_year, on=['noind', 'year'], how='left')
-    return table
+        var_by_year[name_output_var] += ', ' + var_by_year[i].astype(str)
+    var_by_year = var_by_year.reset_index()
+    var_by_year = var_by_year[['noind', 'year', name_output_var]]
+    var_by_year[name_output_var] = var_by_year[name_output_var].str.replace(', nan', '')
+    var_by_year[name_output_var] = var_by_year[name_output_var].str.replace('nan, ', '')
+    return var_by_year
+
+
+def regimes_by_year(table):
+    '''  Creates variables contenaining a list of values for a given year*indiv of (i) schemes,
+    (ii) schemes with non-missing earnings.
+    This function also updates the cadre dummy   '''
+    df = table.copy()
+    df.loc[df.source == 'pe200_09', 'cc'] = 4
+    regimes_by_year = variable_by_year(df, 'cc', 'regimes_by_year')
+    df = df.merge(regimes_by_year, on=['noind', 'year'], how='left')
+
+    df['cc2'] = (df['sal_brut_deplaf'] > 0) * df['cc']
+    salbrut_by_year = variable_by_year(df, 'cc2', 'salbrut_by_year')
+    salbrut_by_year['salbrut_by_year'] = salbrut_by_year['salbrut_by_year'].str.replace(', 0.0', '')
+    salbrut_by_year['salbrut_by_year'] = salbrut_by_year['salbrut_by_year'].apply(lambda x: x[5:] if x[:4] == '0.0,' else x)
+    df = df.merge(salbrut_by_year, on=['noind', 'year'], how='left')
+
+    condition_prive = df['regimes_by_year'].str.contains('|'.join(['10.0, ', ', 10.0']))
+    condition_cadre = df['regimes_by_year'].str.contains('5000.0')
+    condition_noncadre = df['regimes_by_year'].str.contains('6000.0')
+    df.loc[condition_prive * condition_cadre, 'cadre'] = True
+    df.loc[condition_prive * condition_noncadre, 'cadre'] = False
+    return df
 
 
 def wages_from_dads(data_dads):
