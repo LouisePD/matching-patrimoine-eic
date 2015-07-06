@@ -54,6 +54,16 @@ def select_generation(data, first_generation, last_generation):
     return data
 
 
+def select_generation_before_format(data, first_generation, last_generation, reference_table, var_naiss):
+    print "    Only generations between {} and {} have been selected".format(first_generation, last_generation)
+    info_birth = data[reference_table][[var_naiss, 'noind']].copy()
+    to_keep = (info_birth[var_naiss] >= first_generation) & (info_birth[var_naiss] <= last_generation)
+    ind_to_keep = set(info_birth.loc[to_keep, 'noind'])
+    for table in data.keys():
+        data[table] = data[table].loc[data[table]['noind'].isin(ind_to_keep), :]
+    return data
+
+
 def select_regimes(table_career, code_regime_to_import_by_dataset):
     for dataset, regimes in code_regime_to_import_by_dataset.iteritems():
         to_drop = (~table_career['cc'].astype(float).isin(regimes.values())) * (table_career['source'] == dataset)
@@ -93,7 +103,8 @@ def select_years(table_careers, first_year=False, last_year=False):
         if not last_year:
             print "    Only years after {} have been selected".format(first_year)
             last_year = 9999
-        #table_careers = table_careers.drop_duplicates(cols=['noind', 'cc', 'start_date', 'end_year'], take_last=True)
-        to_keep = (table_careers['start_date'].apply(lambda x: x.year) >= first_year) & (table_careers['start_date'].apply(lambda x: x.year) <= last_year)
+        # table_careers = table_careers.drop_duplicates(cols=['noind', 'cc', 'start_date', 'end_year'], take_last=True)
+        start_year = table_careers['start_date'].apply(lambda x: x.year)
+        to_keep = (start_year >= first_year) * (start_year <= last_year)
         table_careers = table_careers.loc[to_keep, :]
         return table_careers

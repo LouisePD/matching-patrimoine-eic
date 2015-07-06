@@ -12,7 +12,7 @@ from format_individual_info_eic import format_individual_info
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, career_table_by_time_unit
 from matching_patrimoine_eic.base.format_yearly import format_unique_year
 from matching_patrimoine_eic.base.load_data import load_data
-from matching_patrimoine_eic.base.select_data import select_data
+from matching_patrimoine_eic.base.select_data import select_data, select_generation_before_format
 from matching_patrimoine_eic.base.stat_describe import describe_individual_info, describe_missing
 
 
@@ -39,6 +39,10 @@ def import_data(path_data, path_storage, datasets_to_import, file_description_pa
     Output: a dict containing two tables -> careers (1 row per indiv*year*status) and individus (1 row per indiv)'''
     data_raw = load_data(path_storage, path_storage, 'storageEIC_2009', file_description_path,
                          datasets_to_import, test=test, ref_table='b100_09')
+    if 'first_generation' or 'last_generation' in options_selection:
+        first = options_selection.get("first_generation", None)
+        last = options_selection.get("last_generation", None)
+        data_raw = select_generation_before_format(data_raw, first, last, 'b100_09', 'an')
     data = format_data(data_raw, time_unit='year', path_storage=path_storage)
     data = select_data(data, file_description_path, options_selection)
     if describe:
@@ -47,7 +51,7 @@ def import_data(path_data, path_storage, datasets_to_import, file_description_pa
     return data
 
 
-def build_eic_data(test=False, options_selection=None):
+def build_eic_data(test=False, describe=False, options_selection=dict()):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
     config.readfp(open(config_directory + '//config.ini'))
@@ -57,7 +61,7 @@ def build_eic_data(test=False, options_selection=None):
     file_description_path = path_storage + all_options.get('file_description_name')
     datasets = dict([(generic[:-6], name) for generic, name in all_options.iteritems() if generic[-5:] == 'table'])
     data = import_data(path_data, path_storage, datasets, file_description_path,
-                       options_selection, test=True, describe=False)
+                       options_selection, test=test, describe=describe)
     data = format_unique_year(data, datasets, option={'complementary': True})
     return data
 
@@ -65,7 +69,7 @@ if __name__ == '__main__':
     import time
     print "Début"
     t0 = time.time()
-    data = build_eic_data(options_selection=dict(first_generation = 1942, last_generation = 1954))
+    data = build_eic_data(test=True, options_selection=dict(complete_career = True, first_generation = 1942, last_generation = 1958))
     t1 = time.time()
     print '\n Time for importing data {}s.'.format('%.2f' % (t1 - t0))
     #import cProfile
