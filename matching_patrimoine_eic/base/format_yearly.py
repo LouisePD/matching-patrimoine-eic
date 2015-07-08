@@ -131,26 +131,26 @@ def unique_yearly_salbrut(table):
     return dfs[['noind', 'year', 'salbrut', 'source_salbrut']]
 
 
-def unique_yearly_workstate(table_all, table_yearly_salbrut):
+def unique_yearly_workstate(table_all, table_yearly_salbrut, datasets):
     ''' Define a unique workstate based on the aggregated information and sal_brut previously selected '''
     # initial_shape = table_yearly_salbrut.shape
     df = table_all.copy()
-    df['source_salbrut'] = df['source']
-    for var in ['full_time', 'cadre', 'inwork_status', 'unemploy_status']:
-        to_impute = df.groupby(['noind', 'year'])[var].transform(lambda s: s.bfill().iloc[0])
-        df.loc[df[var].isnull(), var] = to_impute[df[var].isnull()]
+    df.rename(columns={'source': 'source_salbrut'}, inplace=True)
+    df.loc[df['cc'] == 12, 'fp_actif'] = False
+    df.loc[df['cc'] == 13, 'fp_actif'] = True
+    assert sum(df['cc'].isnull()) == 0
     dfs = table_yearly_salbrut.copy()
-    dfs['helper'] = 4
-    assert not(dfs.duplicated(['noind', 'source_salbrut', 'year'])).all()
-    assert not(df.duplicated(['noind', 'source_salbrut', 'year'])).all()
-    df = df.merge(dfs, on=['noind', 'year', 'source_salbrut'])
-    careers = df.loc[df['helper'] == 4, :].drop('helper', 1)
-    assert not(careers.duplicated(['noind', 'year'])).all()
-    # print careers.shape, initial_shape
-    # assert careers.shape[0] == initial_shape[0]
+    assert sum(dfs.duplicated(['noind', 'source_salbrut', 'year'])) == 0
+    careers = df.merge(dfs, on=['noind', 'year', 'source_salbrut'], how='inner')
+    assert sum(careers['cc'].isnull()) == 0
+    assert sum(careers['source_salbrut'].isnull()) == 0
+    print careers.loc[careers.duplicated(['noind', 'year']), :]
+    assert sum(careers.duplicated(['noind', 'year'])) == 0
+
+    careers = define_workstates(careers, datasets)
     careers.sort(['noind', 'year'], inplace=True)
     for var in ['full_time', 'cadre']:
-        careers[var] = careers.groupby(['noind'])[var].fillna(method='ffill')
+        careers.loc[careers['cc'] == 10, var] = careers.loc[careers['cc'] == 10, : ].groupby(['noind'])[var].fillna(method='ffill')
     return careers
 
 
@@ -171,14 +171,9 @@ def update_basic_with_complementary(table):
     df = table.loc[table.source != 'c200_09', :].copy()
     table = pd.merge(df, table_c200, left_on=['noind', 'year', 'cc'],
                      right_on=['noind', 'year', 'cc_to_match'], how='left', sort=False)
-    table['cadre'] = np.nan
     for var in ['cc', 'cc_c200']:
         table[var] = table[var].astype(float)
-    info = (table['cc'] == 10)
-    table.loc[info, 'cadre'] = (table.loc[info, 'cc_c200'] == 5000.0)
-    assert table.loc[info, 'cadre'].notnull().any()
     rows_to_impute = table['sal_brut_deplaf'].isnull() | (table['sal_brut_deplaf_c200'] > table['sal_brut_deplaf'])
     table.loc[rows_to_impute, 'sal_brut_deplaf'] = table.loc[rows_to_impute, 'sal_brut_deplaf_c200']
     table.drop(renames.values() + ['cc_to_match', 'source_to_match'], 1, inplace=True)
-    assert table['cadre'].notnull().any()
     return table
