@@ -7,6 +7,7 @@
 import numpy as np
 import pandas as pd
 from format_careers import first_columns_career_table
+from format_workstates import define_workstates
 
 
 def cumsum_na(x):
@@ -15,28 +16,39 @@ def cumsum_na(x):
 
 def format_unique_year(data, datasets, option=None, table_names=None):
     ''' To obtain only one workstate status/ wage per year. Selection is perfomed based on the following steps:
-    1- basic scheme with only additional/previously missing information updated if complementary schemes exist
-    2- higher reported wage selected...
-    3- ... associated workstate'''
+    1 - Select on obs by (indiv, year) in each data source
+    1a - basic scheme with only additional/previously missing information updated if complementary schemes exist
+    2 - Define appropriate workstates
+    3 - higher reported wage selected...
+    4 - ... associated workstate'''
     careers = data['careers'].copy()
+    data['careers_raw'] = data.pop('careers')
+    assert sum(careers.cc.isnull()) == 0
     careers = unique_yearly_unemployment(careers, datasets['unemployment'])
+    assert sum(careers.cc.isnull()) == 0
     careers = unique_yearly_dads(careers, datasets['dads'])
-    assert careers['cadre'].notnull().any()
+    assert sum(careers.cc.isnull()) == 0
+    careers = unique_yearly_etat(careers, datasets['etat'])
+    assert sum(careers.cc.isnull()) == 0
     if option and 'complementary' in option.keys() and option['complementary']:
         careers = unique_yearly_b200(careers)
+        assert sum(careers.cc.isnull()) == 0
         assert not(careers.duplicated(['noind', 'source', 'year'])).all()
         careers = update_basic_with_complementary(careers)
+        assert sum(careers.cc.isnull()) == 0
         assert careers['cadre'].notnull().any()
         careers = select_avpf_status(careers)
+        assert sum(careers.cc.isnull()) == 0
         assert careers['cadre'].notnull().any()
     else:
         assert not(careers.duplicated(['noind', 'source', 'year'])).all()
     unique_yearly_sal = unique_yearly_salbrut(careers)
-    first_cols = ['noind', 'year', 'start_date', 'source', 'cc',
-                  'sal_brut_deplaf', 'salbrut', 'source_salbrut', 'inwork_status', 'unemploy_status']
-    data['careers_unique'] = first_columns_career_table(unique_yearly_workstate(careers, unique_yearly_sal),
-        first_col = first_cols)
-    assert data['careers_unique']['cadre'].notnull().any()
+    careers = unique_yearly_workstate(careers, unique_yearly_sal, datasets)
+    if option and 'complementary' in option.keys() and option['complementary']:
+        assert sum(careers.cc.isnull()) == 0
+    first_cols = ['noind', 'year', 'start_date', 'cc', 'salbrut', 'source_salbrut',
+              'inwork_status', 'unemploy_status']
+    data['careers'] = first_columns_career_table(careers, first_col = first_cols)
     return data
 
 
@@ -59,6 +71,16 @@ def unique_yearly_avpf(table):
     return pd.concat([avpf, not_avpf], ignore_index=True)
 
 
+def unique_yearly_etat(table, etat_table_name):
+    not_etat = table.loc[table.source != etat_table_name, :].copy()
+    etat = table.loc[table.source == etat_table_name, :].copy()
+    etat['cc'] = etat['cc'].astype(float)
+    etat['sal_brut_deplaf_cum'] = etat.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
+    etat = etat.sort(['noind', 'year', 'nb_month']).drop_duplicates(['noind', 'year'], take_last=True)
+    # etat.rename(columns={'sal_brut_deplaf_cum': 'sal_brut_deplaf'}, inplace=True)
+    return pd.concat([etat, not_etat], ignore_index=True)
+
+
 def unique_yearly_b200(table):
     ''' Return 1 row per year
     Note: Usually there is 1 row per id,year in the basic scheme data except for RG/MSA
@@ -67,6 +89,7 @@ def unique_yearly_b200(table):
     b200 = table.loc[table.source == 'b200_09', :].copy()
     b200['cc'] = b200['cc'].astype(float)
     b200 = b200.sort(['noind', 'year', 'cc']).drop_duplicates(['noind', 'year'])
+    assert sum(table.cc.isnull()) == 0
     return pd.concat([b200, not_b200], ignore_index=True)
 
 
@@ -88,20 +111,24 @@ def unique_yearly_unemployment(table, unemploy_table_name):
     Selection rule: groupby status and keep the longest period.'''
     not_pe = table.loc[table.source != unemploy_table_name, :].copy()
     pe = table.loc[table.source == unemploy_table_name, :].copy()
+    to_impute = pe['unemploy_status'].isnull()
+    pe.loc[to_impute * (pe['sal_brut_deplaf'] > 0), 'unemploy_status'] = 2
+    pe.loc[to_impute * (pe['sal_brut_deplaf'] == 0), 'unemploy_status'] = 0
+    assert sum(pe['unemploy_status'].isnull()) == 0
     pe['nb_month'] = (pe['end_date'] - pe['start_date']) / np.timedelta64(1, 'M')
     pe_yearly = pe.groupby(['noind', 'year', 'unemploy_status'])['nb_month'].sum()
-    pe_yearly = pe_yearly.unstack('unemploy_status').fillna(0).stack('unemploy_status').reset_index()
+    pe_yearly = pe_yearly.unstack('unemploy_status').stack('unemploy_status').reset_index()
     pe_yearly.columns = ['noind', 'year', 'unemploy_status', 'nb_months']
     pe_yearly = pe_yearly.sort(['noind', 'year', 'nb_months']).drop_duplicates(['noind', 'year'], take_last=True)
-    pe_yearly.rename(columns={'unemploy_status': 'unemploy_status_to_keep'}, inplace=True)
-    pe = pd.merge(pe, pe_yearly, left_on = ['noind', 'year', 'unemploy_status'],
-                  right_on = ['noind', 'year', 'unemploy_status_to_keep'], how='left')
-    pe = pe.loc[pe.unemploy_status == pe.unemploy_status_to_keep, :]
+    pe = pd.merge(pe, pe_yearly, on = ['noind', 'year', 'unemploy_status'], how='right')
     pe['sal_brut_deplaf_cumsum'] = pe.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
     pe = pe.sort(['noind', 'year', 'sal_brut_deplaf']).drop_duplicates(['noind', 'year'], take_last=True)
-    pe = pe.drop(['sal_brut_deplaf', 'unemploy_status_to_keep', 'sal_brut_deplaf_cumsum'], 1)
+    pe = pe.drop(['sal_brut_deplaf'], 1)
+    assert pe.shape[0] == pe_yearly.shape[0]
     pe.rename(columns={'sal_brut_deplaf_cumsum': 'sal_brut_deplaf'}, inplace=True)
-    assert not(pe.duplicated(['noind', 'year'])).all()
+    assert sum(pe.duplicated(['noind', 'year'])) == 0
+    assert sum(pe.cc.isnull()) == 0
+    assert sum(not_pe.cc.isnull()) == 0
     return pd.concat([pe, not_pe], ignore_index=True)
 
 
@@ -113,22 +140,27 @@ def unique_yearly_salbrut(table):
         i = null_col.index(0) if 0 in null_col else None
         if i is not None:
             idx = rowl.index(max(rowl))
-            return columns[idx][16:] # 16 = len(sal_bruit_deplaf)
+            return columns[idx][16:]  # 16 = len(sal_brut_deplaf)
         else:
             return rowl.index(-1)
+    print table.loc[table['cc'].isnull(), :]
+    assert sum(table['cc'].isnull()) == 0
+
     df = table.copy()
     df['year'] = df['year'].astype(int)
     assert not(df.duplicated(['noind', 'year', 'source'])).all()
     df['sal_brut_deplaf'] = df['sal_brut_deplaf'].fillna(-1)
-    dfs = df[['noind', 'year', 'source', 'sal_brut_deplaf']].drop_duplicates(['noind', 'year', 'source']).set_index(['noind', 'year', 'source']).unstack('source')
-    dfs['salbrut'] = dfs.max(axis=1).replace(-1, np.nan)
-    columns = [col[0] + '_' + col[1] for col in dfs.columns if col[0] != 'salbrut']
-    dfs.columns = columns + ['salbrut']
+    # Assumption: Here, we only select the highest wage for a given year
+    dfs = df[['noind', 'year', 'source', 'sal_brut_deplaf']].drop_duplicates(
+        ['noind', 'year', 'source'], take_last=True).set_index(['noind', 'year', 'source']).unstack('source')
+    dfs['salbrut'] = dfs.max(axis=1).fillna(-1)
+    cols = [str(col[0]) + '_' + str(col[1]) for col in dfs.columns if col[0] != 'salbrut']
+    dfs.columns = cols + ['salbrut']
     dfs = dfs.reset_index()
-    dfs['source_salbrut'] = dfs.apply(lambda row: _source(row[columns], columns), axis=1)
-    assert (dfs['source_salbrut'].isnull() == 0).all()
+    dfs['source_salbrut'] = dfs.apply(lambda row: _source(row[cols], cols), axis=1)
+    assert not(dfs['source_salbrut'].isnull()).all()
     assert not(dfs.duplicated(['noind', 'source_salbrut', 'year'])).all()
-    return dfs[['noind', 'year', 'salbrut', 'source_salbrut']]
+    return dfs[['noind', 'year', 'salbrut', 'source_salbrut']].sort(['noind', 'year'])
 
 
 def unique_yearly_workstate(table_all, table_yearly_salbrut, datasets):
@@ -160,6 +192,7 @@ def update_basic_with_complementary(table):
     assert 'c200_09' in list(table['source'])
     table['cc'] = table['cc'].astype(float)
     table_c200 = table.loc[(table['source'] == 'c200_09') * (table['cc'].isin([5000.0, 6000.0])), :].copy()
+    print table_c200.columns
     renames = dict([(old_name, old_name + '_c200') for old_name in table_c200.columns
                     if old_name not in ['noind', 'year']])
     table_c200.rename(columns=renames, inplace=True)

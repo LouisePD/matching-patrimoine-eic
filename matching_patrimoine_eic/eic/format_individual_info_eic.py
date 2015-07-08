@@ -117,9 +117,9 @@ def variable_mode_consolidate(data, var_name, index):
     ''' For a given variable in b100 update missing information with
     equivalent variable in c100 '''
     data_b = data['b100_09'].copy()
-    variable = most_frequent(data_b, var_name)
+    variable = pd.DataFrame(most_frequent(data_b, var_name))
 
     data_c = data['c100_09'].copy()
-    variable_c = most_frequent(data_c, var_name)
-    variable[variable.isnull()] = variable_c[variable.isnull()]
+    variable_c = pd.DataFrame(most_frequent(data_c, var_name))
+    variable.update(variable_c, join = 'left', overwrite = False)
     return variable

@@ -74,7 +74,8 @@ def imputation_avpf(data_b200):
                           + workstate_variables + avpf_variables].copy()
     avpf_b200 = avpf_b200.loc[(avpf_b200.avpf > 0), :]
     avpf_b200['sal_brut_deplaf'] = clean_earning(avpf_b200.loc[:, 'avpf'])
-    avpf_b200['avpf_status'] = avpf_b200.ntregc - avpf_b200.ntregcempl > avpf_b200.ntregcempl
+    avpf_b200['avpf_main'] = avpf_b200.ntregc - avpf_b200.ntregcempl > avpf_b200.ntregcempl
+    avpf_b200['avpf_status'] = True
     avpf_b200.drop(avpf_variables + workstate_variables, axis=1, inplace=True)
     avpf_b200['source'] = 'b200_09_avpf'
     return avpf_b200
@@ -93,6 +94,23 @@ def imputation_deplaf_from_plaf(sal_brut_deplaf, sal_brut_plaf, years, pss_by_ye
     assert len(sal_brut_deplaf) == len(sal_brut_plaf)
     assert sum(sal_brut_deplaf.isnull()) <= nb_miss_ini
     return sal_brut_deplaf
+
+
+def imputation_cc(table_career):
+    ''' Imputation of 'cc' from b200 information '''
+    assert table_career.loc[table_career['cc'].isnull(), 'source'].isin(['etat_09', 'dads_09']).all()
+    #to_impute = table_career['source'].isin(['b200_09', 'etat_09', 'dads_09'])
+    #table_career.loc[to_impute, 'cc'] = table_career.loc[to_impute, : ].groupby(['noind', 'year'])['cc'].fillna(method='pad')
+    table_career['cc'] = table_career.groupby(['noind', 'year'])['cc'].fillna(method='pad')
+    to_impute_etat = (table_career['source'] == 'etat_09') * table_career['cc'].isnull()
+    table_career.loc[to_impute_etat * (table_career['fp_actif'] == True), 'cc'] = 13
+    table_career.loc[to_impute_etat * (table_career['fp_actif'] == False), 'cc'] = 12
+    print table_career.loc[table_career['cc'].isnull(), :]
+    assert (table_career.loc[table_career['cc'].isnull(), 'source'] == 'dads_09').all()
+    table_career.loc[table_career['cc'].isnull() * (table_career['cadre'] == True), 'cc'] = 10
+    table_career.loc[table_career['cc'].isnull() * (table_career['cadre'] == False), 'cc'] = 10
+    assert sum(table_career['cc'].isnull()) == 0
+    return table_career
 
 
 def pss_vector_from_Excel(pss_file_path):
