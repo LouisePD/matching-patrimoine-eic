@@ -27,7 +27,7 @@ def codes_regimes_to_import(file_description):
 
 
 def select_complete_career(data, target_var=None, time_var=None, id_var='noind',
-                           thresholds = {'nb_years_min': 25, 'missing_wages': 0.05}):
+                           thresholds = {'nb_years_min': 30, 'missing_wages': 0.05}):
     ''' This function selects individuals with missing work employment status Throughout their career below a threshold
     Note: As selection is based on assumed workstate definitionsg, it can not be included as a step of select_data'''
     df = data['careers'].copy()
@@ -65,10 +65,13 @@ def select_generation_before_format(data, first_generation, last_generation, ref
 
 
 def select_regimes(table_career, code_regime_to_import_by_dataset):
+    to_keep_code = []
+    cond_dataset = []
     for dataset, regimes in code_regime_to_import_by_dataset.iteritems():
-        to_drop = (~table_career['cc'].astype(float).isin(regimes.values())) * (table_career['source'] == dataset)
-        table_career = table_career.loc[~to_drop, :]
         print "    Selection of regimes for dataset {}: \n {} \n".format(dataset, regimes.keys())
+        to_keep_code += regimes.values()
+        cond_dataset += [dataset]
+    table_career = table_career.loc[table_career['cc'].astype(float).isin(to_keep_code), :]
     return table_career
 
 
@@ -83,10 +86,12 @@ def select_data(data_all, file_description_path, options_selection):
     options_selection_d.update(options_selection)
     file_description = pd.ExcelFile(file_description_path)
     code_regime_to_import_by_dataset = codes_regimes_to_import(file_description)
-    data_careers = data_all['careers']
+    data = data_all.copy()
+    data_careers = data['careers']
     data_careers = select_regimes(data_careers, code_regime_to_import_by_dataset)
     data_careers = select_years(data_careers, options_selection_d['first_year'], options_selection_d['last_year'])
-    data = select_generation(data_all, options_selection_d['first_generation'], options_selection_d['last_generation'])
+    data['careers'] = data_careers
+    data = select_generation(data, options_selection_d['first_generation'], options_selection_d['last_generation'])
     return data
 
 
