@@ -44,38 +44,29 @@ def format_career_l200(name_table, level, pss, temporary_store = None):
     temporary_store.put(name_table, data_l200, format='table', data_columns=True, min_itemsize = 20)
 
 
-def format_career_tables(data, pss_path):
-    formated_careers = dict()
-    tables_regime = [table for table in ['b200_09', 'c200_09'] if table in data.keys()]
+def format_career_tables(pss_path):
+    tables_regime = ['b200_09', 'c200_09']
     pss_by_year = pss_vector_from_Excel(pss_path)
     pss_by_year.drop_duplicates(['year'], inplace=True)
-    imputed_avpf_b200 = imputation_avpf(data['b200_09'].copy())
-    for table_name in tables_regime:
-        format_table = format_career_l200(data[table_name], level = table_name[:-3], pss = pss_by_year)
-        format_table['source'] = table_name
-        formated_careers[table_name] = format_table.sort(['noind', 'start_date'])
-    formated_careers['b200_09'] = pd.concat([formated_careers['b200_09'], imputed_avpf_b200])
-    tables_other = [table for table in ['dads_09', 'etat_09', 'pe200_09'] if table in data.keys()]
+    for name_table in tables_regime:
+        format_career_l200(name_table, level = name_table[:-3], pss = pss_by_year)
+    tables_other = ['dads_09', 'etat_09', 'pe200_09']
     for table_name in tables_other:
         if table_name == 'pe200_09':
             fct = 'format_career_unemployment'
         else:
             fct = 'format_career_' + table_name[:-3]
-        format_table = eval(fct)(data[table_name])
-        format_table['source'] = table_name
-        formated_careers[table_name] = format_table.sort(['noind', 'start_date'])
-    return formated_careers
+        eval(fct)(table_name)
 
 
-def format_dates(data):
+def format_dates(temp_file_path = None):
     ''' This function specifies Data in the appropriate format :
     noind start_date end_date variable time_unit'''
-    data['pe200_09'] = format_dates_unemployment(data['pe200_09'])
-    data['etat_09'] = format_dates_level200(data['etat_09'])
-    data['c200_09'] = format_dates_level200(data['c200_09'])
-    data['b200_09'] = format_dates_level200(data['b200_09'])
-    data['dads_09'] = format_dates_dads(data['dads_09'])
-    return data
+    format_dates_unemployment('pe200_09')
+    format_dates_level200('etat_09')
+    format_dates_level200('c200_09')
+    format_dates_level200('b200_09')
+    format_dates_dads('dads_09')
 
 
 def imputation_avpf(data_b200):

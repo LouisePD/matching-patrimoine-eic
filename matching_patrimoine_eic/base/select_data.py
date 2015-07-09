@@ -35,15 +35,15 @@ def select_complete_career(data, target_var=None, time_var=None, id_var='noind',
     ''' This function selects individuals with missing work employment status Throughout their career below a threshold
     Note: As selection is based on assumed workstate definitionsg, it can not be included as a step of select_data'''
     df = data['careers'].copy()
-    nb_time_by_indiv = df.groupby([id_var])[time_var].count()
+    nb_time_by_indiv = df[[id_var, time_var]].groupby([id_var])[time_var].count()
     df['missing'] = df[target_var].isnull()
-    pct_missing = df.groupby([id_var])['missing'].sum() / nb_time_by_indiv
+    pct_missing = df[[id_var, 'missing']].groupby([id_var])['missing'].sum() / nb_time_by_indiv
     to_keep = (nb_time_by_indiv >= thresholds['nb_years_min']) * (pct_missing <= thresholds['missing_wages'])
     indiv_to_keep = list(set(to_keep[to_keep == True].index))
     for table in data.keys():
-        df = data[table]
-        data[table] = df.loc[df['noind'].isin(indiv_to_keep), :]
-    data['selection'] = pd.DataFrame({'nb_times': nb_time_by_indiv, 'missing': pct_missing, 'select': to_keep})
+        data[table] = data[table].loc[data[table]['noind'].isin(indiv_to_keep), :]
+    data['selection'] = pd.DataFrame({'nb_times': nb_time_by_indiv, 'missing': pct_missing,
+                                      'select': to_keep, 'noind': df['noind']})
     data['individus']['nb_obs_career'] = nb_time_by_indiv
     return data
 
@@ -82,16 +82,18 @@ def select_regimes(table_career, code_regime_to_import_by_dataset):
     return table_career
 
 
-def select_data(data_all, file_description_path, options_selection):
+def select_data(data, file_description_path, options_selection):
     ''' This function selects the appropriate information from EIC
     - selection on sources of information/regimes (keeping a subset of rows)
     - selection on years (keeping a subset of rows)
     TODO: - selection on generation '''
+    assert data['individus'].shape[0] > 1
     options_selection_d = dict(first_year=1952, last_year=2009, first_generation=1932, last_generation=2009)
     if not options_selection:
         options_selection = options_selection_d
     options_selection_d.update(options_selection)
     file_description = pd.ExcelFile(file_description_path)
+
     code_regime_to_import_by_dataset = codes_regimes_to_import(file_description)
     del file_description
     gc.collect()
@@ -104,7 +106,12 @@ def select_data(data_all, file_description_path, options_selection):
 
     data_careers = select_years(data_careers, options_selection_d['first_year'], options_selection_d['last_year'])
     data['careers'] = data_careers
-    data = select_generation(data, options_selection_d['first_generation'], options_selection_d['last_generation'])
+    assert data['individus'].shape[0] !=0
+
+    ind_to_keep = set(data_careers['noind'])
+    data['individus'] = data['individus'].loc[data['individus']['noind'].isin(ind_to_keep), :]
+    assert data['careers'].shape[0] != 0
+    assert data['individus'].shape[0] !=0
     return data
 
 

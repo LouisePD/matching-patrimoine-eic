@@ -57,10 +57,11 @@ def additional_rows(table_career, var_value):
     id_vars = [var_name for var_name in table.columns if var_name not in year_vars + value_vars + start_vars + end_vars]
     df_years = pd.melt(table, id_vars = id_vars, value_vars = year_vars,
                        var_name = 'var_year', value_name = 'year_from_melt')
+
     to_concat = [df_years]
     for to_add in ['value', 'start', 'end']:
         df_type = pd.melt(table, id_vars = ['noind', 'start_date'], value_vars = eval(to_add + '_vars'),
-                        var_name = 'var_' + to_add, value_name = to_add + '_from_melt')
+                          var_name = 'var_' + to_add, value_name = to_add + '_from_melt')
         assert (df_years['noind'] == df_type['noind']).all()
         df_type.drop(['noind', 'start_date'], inplace = True, axis=1)
         assert df_years.shape[0] == df_type.shape[0]
@@ -89,11 +90,10 @@ def careers_to_year(career):
     day_to_year = (career['time_unit'] == 'day')
     nb_years = (end_date.apply(lambda x: x.year) - start_date.apply(lambda x: x.year))
     nb_days = (end_date - start_date) / np.timedelta64(1, 'D')
-    variables_sal = [var for var in table.columns if var in ['sal_brut_deplaf', 'sal_brut_plaf']]
+    variables_sal = [var for var in career.columns if var in ['sal_brut_deplaf', 'sal_brut_plaf']]
     for sal in variables_sal:
         to_select = (day_to_year == 1) * (nb_years == 0)
         career.loc[to_select, sal] = career.loc[to_select, sal] * nb_days.loc[to_select]
-    career.loc[to_select, 'time_unit'] = 'year'
     to_add = additional_rows(career.loc[(day_to_year == 1) * (nb_years > 0), :], var_value = 'sal_brut_deplaf')
     career = career.append(to_add, ignore_index=True)
     # TODO: to work on if number of months exceed 12
@@ -108,6 +108,17 @@ def careers_to_year(career):
     career.drop(['index'], axis=1, inplace=True)
     return career
 
+
+def career_table_by_time_unit(careers, time_unit='year'):
+    ''' This function selects information to keep from the different sources to build (workstate, sal_brut, firm).
+    Workstate/sal_brut are rebuilt in 3 steps:
+    - format at the appropriate time_unit level
+    - selection of the most accurate information on sali for each year
+    - Imputation of missing information '''
+    if time_unit == 'year':
+        careers = careers_to_year(careers)
+        careers = regimes_by_year(careers)
+        return careers
 
 def clean_earning(vec):
     vec.loc[vec == -1] = np.nan
@@ -125,17 +136,6 @@ def crosstable_imputation(data, initial_variable, aggregated_variable):
                                         for mode in crosstable.columns])
     return equivalence_by_to_impute_cat
 
-
-def career_table_by_time_unit(careers, time_unit='year'):
-    ''' This function selects information to keep from the different sources to build (workstate, sal_brut, firm).
-    Workstate/sal_brut are rebuilt in 3 steps:
-    - format at the appropriate time_unit level
-    - selection of the most accurate information on sali for each year
-    - Imputation of missing information '''
-    if time_unit == 'year':
-        careers = careers_to_year(careers)
-        careers = regimes_by_year(careers)
-        return careers
 
 
 def first_columns_career_table(table, first_col=None):
@@ -191,15 +191,17 @@ def format_career_etat(name_table, temporary_store = None):
     temporary_store.put(name_table, formated_etat, format='table', data_columns=True, min_itemsize = 20)
 
 
-def format_career_unemployment(data_pe):
-    workstate_variables = ['unemploy_status', 'pjcall2', 'full_time', 'inwork_status']
+@temporary_store_decorator()
+def format_career_unemployment(name_table, temporary_store = None):
+    workstate_variables = ['unemploy_status', 'pjcall2', 'full_time', 'inwork_status', 'pjctaux']
+    id_variables = ['noind', 'start_date', 'end_date', 'time_unit']
     # try:
     #    equivalence_pjcall2_by_type_all = crosstable_imputation(data_pe, 'pjcall2', 'type_all')
     # except:
     equivalence_pjcall2_by_type_all = {0.0: ['', 'NI'],
                                        2.0: ['01', '02', '04', '05', '21', '22', '33', '54', '82', '18', '47',
                                              '23', '24', '25', '27', '28', '40', '43']}
-
+    data_pe = temporary_store.select(name_table, columns = id_variables + workstate_variables)
     for var in ['full_time', 'unemploy_status', 'inwork_status']:
         data_pe[var] = np.nan
     for mode, associated_values in equivalence_pjcall2_by_type_all.iteritems():
@@ -238,7 +240,8 @@ def format_dates_level200(name_table, temporary_store = None):
     table['end_date'] = table['annee'].astype(str) + '-12-31'
     table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
     table['time_unit'] = 'year'
-    return table
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, table, format='table', data_columns=True, min_itemsize = 20)
 
 
 @temporary_store_decorator()
@@ -258,20 +261,24 @@ def format_dates_unemployment(name_table, temporary_store = None):
     temporary_store.put(name_table, table, format='table', data_columns=True, min_itemsize = 20)
 
 
-def variable_by_year(table, target_var, name_output_var):
+def variable_by_year(df, target_var, name_output_var):
     ''' Creates a variable recording a list of values for a given year*indiv '''
-    df = table.copy()
     df['helper'] = 1
     df['nb_obs'] = df.groupby(['noind', 'year'])['helper'].transform(np.cumsum)
+    nb_obs_max = df['nb_obs'].max()
     df.drop('helper', 1, inplace=True)
     var_by_year = df[['noind', 'year', 'nb_obs', target_var]].set_index(['noind', 'year', 'nb_obs']).unstack('nb_obs')
-    var_by_year.columns = range(df['nb_obs'].max())
+    del df
+    gc.collect()
+    var_by_year.columns = range(nb_obs_max)
     var_by_year[name_output_var] = var_by_year[0].astype(str)
-    for i in range(1, df['nb_obs'].max()):
+    for i in range(1, nb_obs_max):
         var_by_year[name_output_var] += ', ' + var_by_year[i].astype(str)
     var_by_year = var_by_year.reset_index()
     var_by_year = var_by_year[['noind', 'year', name_output_var]]
+    gc.collect()
     var_by_year[name_output_var] = var_by_year[name_output_var].str.replace(', nan', '')
+    gc.collect()
     var_by_year[name_output_var] = var_by_year[name_output_var].str.replace('nan, ', '')
     return var_by_year
 
@@ -280,34 +287,29 @@ def regimes_by_year(table):
     '''  Creates variables contenaining a list of values for a given year*indiv of (i) schemes,
     (ii) schemes with non-missing earnings.
     This function also updates the cadre dummy   '''
-    df = table.copy()
+    df = table
+    # Artificial cc
     df.loc[df.source == 'pe200_09', 'cc'] = 4
+    df.loc[df.source == 'b200_09_avpf', 'cc'] = 2
+
     regimes_by_year = variable_by_year(df, 'cc', 'regimes_by_year')
     df = df.merge(regimes_by_year, on=['noind', 'year'], how='left')
-
+    del regimes_by_year
+    gc.collect()
     df['cc2'] = (df['sal_brut_deplaf'] > 0) * df['cc']
     salbrut_by_year = variable_by_year(df, 'cc2', 'salbrut_by_year')
     salbrut_by_year['salbrut_by_year'] = salbrut_by_year['salbrut_by_year'].str.replace(', 0.0', '')
     salbrut_by_year['salbrut_by_year'] = salbrut_by_year['salbrut_by_year'].apply(lambda x: x[5:] if x[:4] == '0.0,' else x)
     df = df.merge(salbrut_by_year, on=['noind', 'year'], how='left')
+    del salbrut_by_year
+    gc.collect()
 
     condition_prive = df['regimes_by_year'].str.contains('|'.join(['10.0, ', ', 10.0']))
     condition_cadre = df['regimes_by_year'].str.contains('5000.0')
     condition_noncadre = df['regimes_by_year'].str.contains('6000.0')
-    df.loc[condition_prive * condition_cadre, 'cadre'] = True
-    df.loc[condition_prive * condition_noncadre, 'cadre'] = False
+    df.loc[condition_prive * condition_cadre, 'cadre'] = 1
+    df.loc[condition_prive * condition_noncadre, 'cadre'] = 0
     return df
-
-
-def wages_from_dads(data_dads):
-    sal_brut_deplaf = clean_earning(data_dads.loc[:, 'sb'])
-    return sal_brut_deplaf
-
-
-def wages_from_etat(data_etat):
-    data_etat.loc[:, 'brut'] = clean_earning(data_etat.loc[:, 'brut'])
-    sal_brut_deplaf = data_etat[['sbrut']]
-    return sal_brut_deplaf
 
 
 def yearly_value_converter(value, time_unit, start_date, end_date):
@@ -347,5 +349,3 @@ def yearly_value_converter(value, time_unit, start_date, end_date):
             start_dates += [start_datef]
             end_dates += [end_datef]
             return years, values, start_dates, end_dates
-
-

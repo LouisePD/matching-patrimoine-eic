@@ -39,14 +39,17 @@ def minmax_by_noind(data, var_name, index):
     return to_return
 
 
-def most_frequent(table, var):
-    table_var = table[['noind', var]]
+def most_frequent(table_var, var):
+    ''' table_var contains only two columns 'noind' and var'''
+    assert 'noind' in table_var
+    assert var in table_var
 
     def _mode(x):
         try:
             return x.value_counts().index[0]
         except:
             return np.NaN
+
     mode_var = table_var.groupby(['noind'], sort=True).agg(lambda x: _mode(x))
     return mode_var[var]
 
