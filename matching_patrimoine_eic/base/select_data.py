@@ -3,6 +3,7 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
+import gc
 import pandas as pd
 from load_data import temporary_store_decorator
 
@@ -25,6 +26,7 @@ def codes_regimes_to_import(file_description):
     for table, sheet_code in zip(tables, sheets_code):
         codes = _select(sheet_code)
         codes_regimes_to_import[table] = codes
+    file_description.close()
     return codes_regimes_to_import
 
 
@@ -91,7 +93,9 @@ def select_data(data_all, file_description_path, options_selection):
     options_selection_d.update(options_selection)
     file_description = pd.ExcelFile(file_description_path)
     code_regime_to_import_by_dataset = codes_regimes_to_import(file_description)
-    data = data_all.copy()
+    del file_description
+    gc.collect()
+
     data_careers = data['careers']
     data_careers = select_regimes(data_careers, code_regime_to_import_by_dataset)
     data_careers = select_years(data_careers, options_selection_d['first_year'], options_selection_d['last_year'])

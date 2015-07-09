@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Specific function to format EIC tables
-
+import gc
 @author: l.pauldelvaux
 """
 
@@ -141,6 +141,8 @@ def wages_from_b200(data_b200, pss_by_year):
     sal_brut_plaf_ini = data_b200.loc[:, 'remu'].copy()
     sal_brut_deplaf_ini = data_b200.loc[:, 'remutot'].copy()
     years = data_b200.start_date.apply(lambda x: x.year)
+    del data_b200
+    gc.collect()
     assert len(sal_brut_deplaf_ini) == len(sal_brut_plaf_ini) == len(years)
     sal_brut_deplaf = imputation_deplaf_from_plaf(sal_brut_deplaf_ini, sal_brut_plaf_ini, years, pss_by_year)
     assert len(sal_brut_deplaf) == len(sal_brut_plaf_ini)

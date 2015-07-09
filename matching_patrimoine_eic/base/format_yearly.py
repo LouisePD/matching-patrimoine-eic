@@ -44,6 +44,8 @@ def format_unique_year(data, datasets, option=None, table_names=None):
         assert not(careers.duplicated(['noind', 'source', 'year'])).all()
     unique_yearly_sal = unique_yearly_salbrut(careers)
     careers = unique_yearly_workstate(careers, unique_yearly_sal, datasets)
+    del unique_yearly_sal
+    gc.collect()
     if option and 'complementary' in option.keys() and option['complementary']:
         assert sum(careers.cc.isnull()) == 0
     first_cols = ['noind', 'year', 'start_date', 'cc', 'salbrut', 'source_salbrut',
@@ -72,8 +74,8 @@ def unique_yearly_avpf(table):
 
 
 def unique_yearly_etat(table, etat_table_name):
-    not_etat = table.loc[table.source != etat_table_name, :].copy()
-    etat = table.loc[table.source == etat_table_name, :].copy()
+    not_etat = table.loc[table.source != etat_table_name, :]
+    etat = table.loc[table.source == etat_table_name, :]
     etat['cc'] = etat['cc'].astype(float)
     etat['sal_brut_deplaf_cum'] = etat.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
     etat = etat.sort(['noind', 'year', 'nb_month']).drop_duplicates(['noind', 'year'], take_last=True)
@@ -85,8 +87,8 @@ def unique_yearly_b200(table):
     ''' Return 1 row per year
     Note: Usually there is 1 row per id,year in the basic scheme data except for RG/MSA
     Selection rule: keep the 'most important' scheme (RG)'''
-    not_b200 = table.loc[table.source != 'b200_09', :].copy()
-    b200 = table.loc[table.source == 'b200_09', :].copy()
+    not_b200 = table.loc[table.source != 'b200_09', :]
+    b200 = table.loc[table.source == 'b200_09', :]
     b200['cc'] = b200['cc'].astype(float)
     b200 = b200.sort(['noind', 'year', 'cc']).drop_duplicates(['noind', 'year'])
     assert sum(table.cc.isnull()) == 0
@@ -97,8 +99,8 @@ def unique_yearly_dads(table, dads_table_name):
     ''' Return 1 row per year
     Note: several information for a given year are due to multiple employment status
     Selection rule: sum wages over year and keep status of the longest period.'''
-    not_dads = table.loc[table.source != dads_table_name, :].copy()
-    dads = table.loc[table.source == dads_table_name, :].copy()
+    not_dads = table.loc[table.source != dads_table_name, :]
+    dads = table.loc[table.source == dads_table_name, :]
     dads['nb_month'] = (dads['end_date'] - dads['start_date']) / np.timedelta64(1, 'M')
     dads['sal_brut_deplaf_cum'] = dads.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
     dads = dads.sort(['noind', 'year', 'nb_month']).drop_duplicates(['noind', 'year'], take_last=True)
@@ -109,8 +111,8 @@ def unique_yearly_unemployment(table, unemploy_table_name):
     ''' Return the most appropriate state when several unemployment benefits status for the same year.
     Note: several informations for a given year are due to information given on a daily base in the unemployment data
     Selection rule: groupby status and keep the longest period.'''
-    not_pe = table.loc[table.source != unemploy_table_name, :].copy()
-    pe = table.loc[table.source == unemploy_table_name, :].copy()
+    not_pe = table.loc[table.source != unemploy_table_name, :]
+    pe = table.loc[table.source == unemploy_table_name, :]
     to_impute = pe['unemploy_status'].isnull()
     pe.loc[to_impute * (pe['sal_brut_deplaf'] > 0), 'unemploy_status'] = 2
     pe.loc[to_impute * (pe['sal_brut_deplaf'] == 0), 'unemploy_status'] = 0
@@ -166,24 +168,25 @@ def unique_yearly_salbrut(table):
 def unique_yearly_workstate(table_all, table_yearly_salbrut, datasets):
     ''' Define a unique workstate based on the aggregated information and sal_brut previously selected '''
     # initial_shape = table_yearly_salbrut.shape
-    df = table_all.copy()
+    df = table_all
     df.rename(columns={'source': 'source_salbrut'}, inplace=True)
     df.loc[df['cc'] == 12, 'fp_actif'] = False
     df.loc[df['cc'] == 13, 'fp_actif'] = True
     assert sum(df['cc'].isnull()) == 0
     dfs = table_yearly_salbrut.copy()
     assert sum(dfs.duplicated(['noind', 'source_salbrut', 'year'])) == 0
-    careers = df.merge(dfs, on=['noind', 'year', 'source_salbrut'], how='inner')
-    assert sum(careers['cc'].isnull()) == 0
-    assert sum(careers['source_salbrut'].isnull()) == 0
-    print careers.loc[careers.duplicated(['noind', 'year']), :]
-    assert sum(careers.duplicated(['noind', 'year'])) == 0
+    df = df.merge(dfs, on=['noind', 'year', 'source_salbrut'], how='inner')
+    del dfs
+    gc.collect()
+    assert sum(df['cc'].isnull()) == 0
+    assert sum(df['source_salbrut'].isnull()) == 0
+    assert sum(df.duplicated(['noind', 'year'])) == 0
 
-    careers = define_workstates(careers, datasets)
-    careers.sort(['noind', 'year'], inplace=True)
+    df = define_workstates(df, datasets)
+    df.sort(['noind', 'year'], inplace=True)
     for var in ['full_time', 'cadre']:
-        careers.loc[careers['cc'] == 10, var] = careers.loc[careers['cc'] == 10, : ].groupby(['noind'])[var].fillna(method='ffill')
-    return careers
+        df.loc[df['cc'] == 10, var] = df.loc[df['cc'] == 10, :].groupby(['noind'])[var].fillna(method='ffill')
+    return df
 
 
 def update_basic_with_complementary(table):
@@ -191,8 +194,7 @@ def update_basic_with_complementary(table):
     assert 'b200_09' in list(table['source'])
     assert 'c200_09' in list(table['source'])
     table['cc'] = table['cc'].astype(float)
-    table_c200 = table.loc[(table['source'] == 'c200_09') * (table['cc'].isin([5000.0, 6000.0])), :].copy()
-    print table_c200.columns
+    table_c200 = table.loc[(table['source'] == 'c200_09') * (table['cc'].isin([5000.0, 6000.0])), :]
     renames = dict([(old_name, old_name + '_c200') for old_name in table_c200.columns
                     if old_name not in ['noind', 'year']])
     table_c200.rename(columns=renames, inplace=True)
@@ -201,8 +203,8 @@ def update_basic_with_complementary(table):
     # If both Agirc (5000) and Arcco (6000) on a same year -> we keep agirc
     table_c200 = table_c200.sort(['noind', 'year', 'cc_c200'])
     table_c200 = table_c200.drop_duplicates(['noind', 'year'])  # First = Agirc
-    df = table.loc[table.source != 'c200_09', :].copy()
-    table = pd.merge(df, table_c200, left_on=['noind', 'year', 'cc'],
+    table = table.loc[table.source != 'c200_09', :]
+    table = pd.merge(table, table_c200, left_on=['noind', 'year', 'cc'],
                      right_on=['noind', 'year', 'cc_to_match'], how='left', sort=False)
     for var in ['cc', 'cc_c200']:
         table[var] = table[var].astype(float)
