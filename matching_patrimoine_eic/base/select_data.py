@@ -4,6 +4,8 @@ Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
 import pandas as pd
+from load_data import temporary_store_decorator
+
 
 def codes_regimes_to_import(file_description):
     ''' Collect codes of regimes -basic and supplementary schemes -
@@ -54,14 +56,16 @@ def select_generation(data, first_generation, last_generation):
     return data
 
 
-def select_generation_before_format(data, first_generation, last_generation, reference_table, var_naiss):
+@temporary_store_decorator()
+def select_generation_before_format(first_generation, last_generation,
+                                    reference_table, var_naiss, temporary_store = None):
     print "    Only generations between {} and {} have been selected".format(first_generation, last_generation)
-    info_birth = data[reference_table][[var_naiss, 'noind']].copy()
+    info_birth = temporary_store.select(reference_table, columns=[var_naiss, 'noind'])
     to_keep = (info_birth[var_naiss] >= first_generation) & (info_birth[var_naiss] <= last_generation)
     ind_to_keep = set(info_birth.loc[to_keep, 'noind'])
-    for table in data.keys():
-        data[table] = data[table].loc[data[table]['noind'].isin(ind_to_keep), :]
-    return data
+    for table in temporary_store.keys():
+        df = temporary_store.select(table, where='noind in ind_to_keep')
+        temporary_store.put(table, df, format='table', data_columns=True, min_itemsize = 20)
 
 
 def select_regimes(table_career, code_regime_to_import_by_dataset):
@@ -71,7 +75,8 @@ def select_regimes(table_career, code_regime_to_import_by_dataset):
         print "    Selection of regimes for dataset {}: \n {} \n".format(dataset, regimes.keys())
         to_keep_code += regimes.values()
         cond_dataset += [dataset]
-    table_career = table_career.loc[table_career['cc'].astype(float).isin(to_keep_code), :]
+    to_keep = table_career['cc'].astype(float).isin(to_keep_code) | (table_career['source'] == 'pe200_09')
+    table_career = table_career.loc[to_keep, :]
     return table_career
 
 

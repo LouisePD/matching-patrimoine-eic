@@ -3,12 +3,14 @@
 Author: LPaul-Delvaux
 Created on 18 may 2015
 '''
-
+import ConfigParser
+import gc
 import pandas as pd
 from pandas import read_stata
-from os import listdir, remove
+from os import listdir, remove, path
 from os.path import isfile, join
 from numpy import array, unique
+from memory_profiler import profile
 
 
 def clean_dta_filename(file_name):
@@ -76,8 +78,9 @@ def create_hdf5(path_data, file_storage, datasets_to_import):
         hdf.close()
 
 
+# @profile(precision=4)
 def load_data(path_data, path_storage=None, hdf_name=None, file_description_path=None,
-                  datasets_to_import=None, test=False, nb_indiv=250, ref_table=None):
+              datasets_to_import=None, test=False, nb_indiv=400, ref_table=None):
     ''' This function loads te different stata tables, save them in a hdf5 file
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
@@ -101,50 +104,89 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
     else:
         print "We use the extensive dataset"
         hdf = pd.HDFStore(storage_file)
-    data = dict()
     if file_description_path:
         selection_to_import = True
         file_description = pd.ExcelFile(file_description_path)
         variables_to_import_by_dataset = variables_to_collect(file_description,
-                                                              sheets_to_import=datasets_to_import,
-                                                              return_list=True)
+                                                              sheets_to_import=datasets_to_import)
     else:
         selection_to_import = False
+    temp_file_path = temporary_store_path()
+    temp = pd.HDFStore(temp_file_path, mode = "w", title = "Temporary file")
     for dataset in datasets_to_import:
         if selection_to_import:
-            selection_variables = variables_to_import_by_dataset[dataset]
-            # print "    The subset of imported variables is:", selection_variables
-            data[dataset] = hdf.select('/tables/' + dataset, columns=selection_variables)
+            type_variables = variables_to_import_by_dataset[dataset]
+            df = hdf.select('/tables/' + dataset, columns=type_variables.keys())
+            df = type_variable_table(df, type_variables)
         else:
-            data[dataset] = hdf.select('/tables/' + dataset)
-    print "Raw datasets are now loaded with the following tables: \n", data.keys()
+            df = hdf.select('/tables/' + dataset)
+        temp.put(dataset, df, format='table', data_columns=True, min_itemsize = 20)
+    print "Raw datasets are now loaded with the following tables: \n", datasets_to_import
+    temp.close()
+    hdf.close()
     close_hdf()
-    if file_description_path:
-        variables_type_by_dataset = variables_to_collect(file_description,
-                                                         sheets_to_import=datasets_to_import)
-        data = type_variables(data, variables_type_by_dataset)
-    return data
 
 
-def type_variables(data, type_variables_by_dataset):
-    def _type(vect, vtype):
-        if vtype == 'Num':
-            return vect.convert_objects(convert_numeric=True).round(2)
-        elif vtype in ['Str', 'Alph']:
-            return vect.astype(str)
-        elif vtype in ['Int', 'Cat']:
-            return vect.convert_objects(convert_numeric=True).round()
-        else:
-            print "Type not taken into account {}".format(vtype)
-            return vect
+    config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
+    config = ConfigParser.ConfigParser()
+    config.readfp(open(config_directory + '//config.ini'))
+    all_options = dict(config.items('TEMPORARY'))
+    tmp_directory = all_options.get('path_storage')
+    if not file_name_tmp:
+        file_name_tmp = 'temporary_storage'
+    assert file_name_tmp is not None
+    if not file_name_tmp.endswith('.h5'):
+        file_name_tmp = "{}.h5".format(file_name_tmp)
+    file_path_tmp = path.join(tmp_directory, file_name_tmp)
+    return file_path_tmp
+
+
+def temporary_store_decorator():
+    file_path = temporary_store_path()
+
+    def actual_decorator(func):
+        def func_wrapper(*args, **kwargs):
+            temporary_store = pd.HDFStore(file_path)
+            try:
+                return func(*args, temporary_store = temporary_store, **kwargs)
+            finally:
+                gc.collect()
+                temporary_store.close()
+        return func_wrapper
+
+    return actual_decorator
+
+
+def type_variables_data(data, type_variables_by_dataset):
     for dataset in data.keys():
         type_variables = type_variables_by_dataset[dataset]
         for var_name, var_type in type_variables.iteritems():
             try:
-                data[dataset][var_name] = _type(data[dataset][var_name], var_type)
+                data[dataset][var_name] = type_variable_vect(data[dataset][var_name], var_type)
             except:
                 print "Type {} not taken into account for {} in {}".format(var_type, var_name, dataset)
     return data
+
+
+def type_variable_table(table, type_variables):
+    for var_name, var_type in type_variables.iteritems():
+        try:
+            table[var_name] = type_variable_vect(table[var_name], var_type)
+        except:
+            print "Type {} not taken into account for {} in {}".format(var_type, var_name, table.name)
+    return table
+
+
+def type_variable_vect(vect, vtype):
+    if vtype == 'Num':
+        return vect.convert_objects(convert_numeric=True).round(2)
+    elif vtype in ['Str', 'Alph']:
+        return vect.astype(str)
+    elif vtype in ['Int', 'Cat']:
+        return vect.convert_objects(convert_numeric=True).round()
+    else:
+        print "Type not taken into account {}".format(vtype)
+        return vect
 
 
 def variables_to_collect(file_description, sheets_to_import=None, info='Type', return_list=False):

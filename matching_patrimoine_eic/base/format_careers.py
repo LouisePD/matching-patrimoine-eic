@@ -9,11 +9,19 @@ import numpy as np
 import pandas as pd
 
 
-def aggregate_career_table(careers):
+@temporary_store_decorator()
+def aggregate_career_table(option='eic', temporary_store = None):
     ''' This function create an aggregate database with all the available information on careers:
     Output: 1 row per indiv*time_unit*status'''
-    tables_by_source = list(careers.values())
-    aggregate_table = pd.concat(tables_by_source).sort(['noind', 'start_date', 'end_date'])
+    to_concat = []
+    tables_to_collect = ['b200_09', 'etat_09', 'dads_09', 'pe200_09', 'c200_09']
+    if option == 'eir':
+        tables_to_collect = ['eir2008_7000', 'eir2008_9001', 'eir2008_8000']
+    for table in tables_to_collect:
+        df = temporary_store.select(table)
+        to_concat += [df]
+    temporary_store.close()
+    aggregate_table = pd.concat(to_concat, axis=0, ignore_index = True).sort(['noind', 'start_date', 'end_date'])
     aggregate_table = first_columns_career_table(aggregate_table)
     return aggregate_table
 
@@ -135,10 +143,12 @@ def first_columns_career_table(table, first_col=None):
     return table
 
 
-def format_career_dads(data_dads):
-    workstate_variables = ['cda', 'cs1', 'domempl', 'tain', 'ce']
-    formated_dads = data_dads[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
-    formated_dads['sal_brut_deplaf'] = wages_from_dads(data_dads)
+@temporary_store_decorator()
+def format_career_dads(name_table, temporary_store = None):
+    workstate_variables = ['cda', 'cs1', 'domempl', 'tain', 'ce', 'sb']
+    id_variables = ['noind', 'start_date', 'end_date', 'time_unit']
+    formated_dads = temporary_store.select(name_table, columns=id_variables + workstate_variables)
+    formated_dads['sal_brut_deplaf'] = clean_earning(formated_dads.loc[:, 'sb'])
     for var in ['full_time', 'unemploy_status', 'inwork_status']:
         formated_dads[var] = np.nan
     formated_dads['inwork_status'] = True
@@ -150,10 +160,11 @@ def format_career_dads(data_dads):
     return formated_dads
 
 
-def format_career_etat(data_etat):
-    print data_etat.columns
-    workstate_variables = ['enreg', 'quot', 'ce', 'rss']
-    formated_etat = data_etat[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
+@temporary_store_decorator()
+def format_career_etat(name_table, temporary_store = None):
+    workstate_variables = ['enreg', 'quot', 'ce', 'rss', 'sbrut']
+    id_variables = ['noind', 'start_date', 'end_date', 'time_unit']
+    formated_etat = temporary_store.select(name_table, columns=id_variables + workstate_variables)
     formated_etat['quot'] = formated_etat['quot'].astype(float)
     formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
     for var in ['full_time', 'unemploy_status', 'inwork_status', 'fp_actif']:
@@ -187,22 +198,27 @@ def format_career_unemployment(data_pe):
     return formated_pe
 
 
-def format_dates_dads(table):
+@temporary_store_decorator()
+def format_dates_dads(name_table, temporary_store = None):
     def _convert_daysofyear(x):
         try:
             return int(x) - 1
         except:
             return 0
+    table = temporary_store.select(name_table)
     table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
     table['start_date'] += table['debremu'].apply((lambda x: dt.timedelta(days=_convert_daysofyear(x))))
     table['end_date'] = table['annee'].astype(str) + '-12-31'
     table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
     table['time_unit'] = 'year'
     table = table.drop(['annee', 'debremu'], axis=1)
-    return table
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, table, format='table', data_columns=True, min_itemsize = 20)
 
 
-def format_dates_level200(table):
+@temporary_store_decorator()
+def format_dates_level200(name_table, temporary_store = None):
+    table = temporary_store.select(name_table)
     table['start_date'] = pd.to_datetime(table['annee'], format="%Y")
     table['end_date'] = table['annee'].astype(str) + '-12-31'
     table.loc[:, 'end_date'] = pd.to_datetime(table.loc[:, 'end_date'], format="%Y-%m-%d")
@@ -210,18 +226,21 @@ def format_dates_level200(table):
     return table
 
 
-def format_dates_unemployment(table):
+@temporary_store_decorator()
+def format_dates_unemployment(name_table, temporary_store = None):
     ''' Rework on pole-emploi database dates'''
     def _convert_stata_dates(stata_vector):
         ''' In Stata dates are coded in number of days from 01jan1960 (=0) '''
         initial_date = pd.to_datetime('1960-01-01', format="%Y-%m-%d")
         dates = initial_date + stata_vector.apply((lambda x: dt.timedelta(days= int(x))))
         return dates
+    table = temporary_store.select(name_table)
     for date_var in ['pjcdtdeb', 'pjcdtfin']:
         table.loc[:, date_var] = _convert_stata_dates(table.loc[:, date_var])
     table.rename(columns={'pjcdtdeb': 'start_date', 'pjcdtfin': 'end_date'}, inplace=True)
     table['time_unit'] = 'day'
-    return table
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, table, format='table', data_columns=True, min_itemsize = 20)
 
 
 def variable_by_year(table, target_var, name_output_var):

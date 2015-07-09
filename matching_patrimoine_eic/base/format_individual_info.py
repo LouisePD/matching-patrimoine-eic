@@ -4,6 +4,7 @@
 """
 import numpy as np
 import pandas as pd
+from load_data import temporary_store_decorator
 
 
 def clean_civilstate_level100(x):
@@ -71,7 +72,8 @@ def nenf_from_edp(table_edp):
     return nenf_99
 
 
-def variable_last_available(data, var_name_by_table):
+@temporary_store_decorator()
+def variable_last_available(var_name_by_table, temporary_store = None):
     ''' This function returns the last available information across all datasets
     var_nama_by_table: {table_name: {names: [targeted_variable_name, year_variable_name],
                                      order: integer} }'''
@@ -79,12 +81,14 @@ def variable_last_available(data, var_name_by_table):
     for table_name, table_info in var_name_by_table.iteritems():
         var_names = table_info['names']
         order = table_info['order']
-        table = data[table_name][['noind'] + var_names].copy()
+        table = temporary_store.select(table_name, columns=[['noind'] + var_names])
         table.rename(columns={var_names[0]: 'variable', var_names[1]: 'year'}, inplace=True)
         table.set_index(table.noind, inplace=True)
-        table = table.loc[table['variable'].notnull(), :].sort(['year'])
+
+        table = table.loc[table['variable'].notnull(), :].sort('year')
         table['order'] = order
         tables_to_concat += [table]
-    result = pd.concat(tables_to_concat).sort(['noind', 'year', 'order'], ascending=[1, 1, 0])
-    result = result.drop_duplicates(['noind'], take_last = True)
+    temporary_store.close()
+    result = pd.concat(tables_to_concat, axis=0, ignore_index=True).sort(['noind', 'year', 'order'])
+    result = result.drop_duplicates(['noind'])
     return result['variable']

@@ -9,26 +9,39 @@ import numpy as np
 import pandas as pd
 from matching_patrimoine_eic.base.format_careers import clean_earning, format_dates_dads, format_dates_unemployment
 from matching_patrimoine_eic.base.format_careers import format_career_dads, format_career_etat, format_career_unemployment, format_dates_level200
+from matching_patrimoine_eic.base.load_data import temporary_store_decorator
 
 
-def format_career_l200(data_l200, level, pss):
+@temporary_store_decorator()
+def format_career_l200(name_table, level, pss, temporary_store = None):
+    workstate_variables = ['st', 'statutp', 'ntpc', 'quotite', 'remu', 'remutot']
+    if level == 'c200':
+        workstate_variables += ['remuta', 'remutb', 'remutc']
+    id_vars = ['noind', 'start_date', 'end_date', 'time_unit', 'cc']
+    avpf_variables = ['avpf', 'ntregc', 'ntregcempl']
+    data_l200 = temporary_store.select(name_table, columns=workstate_variables + id_vars + avpf_variables)
     assert data_l200['cc'].notnull().all()
     wages_from = 'wages_from_' + level
-    workstate_variables = ['st', 'statutp', 'ntpc', 'quotite']
-    formated_l200 = data_l200[['noind', 'start_date', 'end_date', 'time_unit', 'cc'] + workstate_variables].copy()
-    formated_l200['sal_brut_plaf'], formated_l200['sal_brut_deplaf'] = eval(wages_from)(data_l200, pss)
+    if level == 'b200':
+        imputed_avpf_b200 = imputation_avpf(data_l200)
+    data_l200['sal_brut_plaf'], data_l200['sal_brut_deplaf'] = eval(wages_from)(data_l200, pss)
     for var in ['full_time', 'unemploy_status', 'inwork_status', 'cadre']:
-        formated_l200[var] = np.nan
-    formated_l200['inwork_status'] = True
-    cond_notworking = (formated_l200['ntpc'] == 0) | (formated_l200['statutp'].isin([2, 3]))
-    formated_l200.loc[cond_notworking, 'inwork_status'] = False
-    cond_fulltime = (formated_l200['quotite'] == 0)
-    formated_l200.loc[cond_fulltime, 'full_time'] = True
-    formated_l200.loc[~cond_fulltime & formated_l200['quotite'].notnull(), 'full_time'] = False
+        data_l200[var] = np.nan
+    data_l200['inwork_status'] = 1
+    cond_notworking = (data_l200['ntpc'] == 0) | (data_l200['statutp'].isin([2, 3]))
+    data_l200.loc[cond_notworking, 'inwork_status'] = 0
+    cond_fulltime = (data_l200['quotite'] == 0)
+    data_l200.loc[cond_fulltime, 'full_time'] = 1
+    data_l200.loc[~cond_fulltime & data_l200['quotite'].notnull(), 'full_time'] = 0
     # TODO: Deal with cadre/noncadre
-    formated_l200.drop(workstate_variables, 1, inplace=True)
-    assert formated_l200['cc'].notnull().all()
-    return formated_l200
+    data_l200.drop(workstate_variables, 1, inplace=True)
+    data_l200['source'] = name_table
+    assert data_l200['cc'].notnull().all()
+    if level == 'b200':
+        imputed_avpf_b200.drop([var for var in workstate_variables if var in imputed_avpf_b200.columns], 1, inplace=True)
+        data_l200 = pd.concat([data_l200, imputed_avpf_b200], ignore_index=True)
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, data_l200, format='table', data_columns=True, min_itemsize = 20)
 
 
 def format_career_tables(data, pss_path):

@@ -5,42 +5,52 @@
 import numpy as np
 import pandas as pd
 from matching_patrimoine_eic.base.format_individual_info import most_frequent
+from matching_patrimoine_eic.base.format_careers import clean_earning
+from matching_patrimoine_eic.base.load_data import temporary_store_decorator
 
 
-def build_anaiss(data, index):
+@temporary_store_decorator()
+def build_anaiss(index, temporary_store = None):
     ''' Returns a length(index)-vector of years of birth
     - collected from: b100 (check with c100)
     - code: 0 = Male / 1 = female '''
-    anaiss = most_frequent(data['eir2008_avant08'], 'an')
+    df = temporary_store.select('eir2008_avant08', columns = ['noind', 'an'])
+    anaiss = most_frequent(df, 'an')
     return anaiss
 
 
-def build_civilstate(data, index):
+@temporary_store_decorator()
+def build_civilstate(index, temporary_store = None):
     ''' Returns a length(index)-vector of civilstate:
     - collected from:
     - code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
-    data['eir2008_avant08']['sm'] = clean_civilstate_level100(data['eir2008_avant08']['sm'])
-    civilstate = most_frequent(data['eir2008_avant08'], 'sm')
+    df = temporary_store.select('eir2008_avant08', columns=['noind', 'sm'])
+    df['sm'] = clean_civilstate_level100(df['sm'])
+    civilstate = most_frequent(df, 'sm')
     return civilstate
 
 
-def build_nenf(data, index):
+@temporary_store_decorator()
+def build_nenf(index, temporary_store = None):
     ''' Returns a length(index)-vector of number of children
     Information is often missing so we use information provided from 3 variables'''
-    nenf1 = most_frequent(data['eir2008_avant08'], 'nre')
-    nenf2 = most_frequent(data['eir2008_avant08'], 'nrelev')
-    nenf3 = most_frequent(data['eir2008_avant08'], 'nrecharge')
+    df = temporary_store.select('eir2008_avant08', columns=['noind', 'nre', 'nrelev', 'nrecharge'])
+    nenf1 = most_frequent(df[['noind', 'nre']], 'nre')
+    nenf2 = most_frequent(df[['noind', 'nrelev']], 'nrelev')
+    nenf3 = most_frequent(df[['noind', 'nrecharge']], 'nrecharge')
     nenf = nenf1
     nenf[nenf.isnull()] = nenf2[nenf.isnull()]
     nenf[nenf.isnull()] = nenf3[nenf.isnull()]
     return nenf
 
 
-def build_sexe(data, index):
+@temporary_store_decorator()
+def build_sexe(index, temporary_store = None):
     ''' Returns a length(index)-vector of sexes
     - collected from: b100 (eventual add  with c100)
     - code: 0 = Male / 1 = female (initial code is 1/2)'''
-    sexe = most_frequent(data['eir2008_avant08'], 'sexi')
+    df = temporary_store.select('eir2008_avant08', columns = ['sexi', 'noind'])
+    sexe = most_frequent(df, 'sexi')
     sexe = sexe.replace([1, 2], [0, 1])
     return sexe
 
@@ -68,16 +78,43 @@ def clean_civilstate_etat(x):
     return x
 
 
-def format_individual_info(data):
+@temporary_store_decorator()
+def format_individual_info(temporary_store = None):
     ''' This function extracts individual information which is not time dependant
     and recorded at year 2009 from the set of EIC's databases.
     Internal coherence and coherence between data.
     When incoherent information a rule of prioritarisation is defined
     Note: People we want information on = people in b100/b200. '''
-    index = sorted(set(data['eir2008_avant08']['noind']))
+    index = sorted(set(temporary_store.select('eir2008_avant08')['noind']))
     columns = ['sexe', 'anaiss', 'nenf', 'civilstate']  # , 'findet']
     info_ind = pd.DataFrame(columns = columns, index = index)
     for variable_name in columns:
-        info_ind[variable_name] = eval('build_' + variable_name)(data, index)
-    info_ind['noind'] = info_ind.index
+        info_ind[variable_name] = eval('build_' + variable_name)(index)
+    info_ind['noind'] = index
     return info_ind
+
+
+@temporary_store_decorator()
+def format_pension_info(temporary_store = None):
+    df = temporary_store.select('eir2008_avant08')
+    columns_to_keep = ['noind', 'cc', 'date_liquidation', 'date_jouissance']
+    df['cc'] = df['cc'].astype(float)
+    assert sum(df['cc'].isnull()) == 0
+    df['date_liquidation'] = build_date_pension(df, 'liq')
+    df['date_jouissance'] = build_date_pension(df, 'ent')
+    to_rename = {1: 'direct', 2: 'derive', 3: 'conj_charge', 4: 'tierce', 5: 'bonif_enf', 6: 'fsv', 7: '814',
+                 8: 'aspa', 9: 'enf_c', 10: 'nbi', 11: 'other'}
+
+    for i in range(1, 12):
+        name = 'pension_' + to_rename[i]
+        df[name] = clean_earning(df['m' + str(i)])
+        columns_to_keep += [name]
+    df['pension_tot'] = clean_earning(df['mont'])
+    columns_to_keep += ['pension_tot']
+    return df[columns_to_keep]
+
+
+def build_date_pension(df, prefix):
+    date = pd.to_datetime((df[prefix + 'ddaa'] * 10000 + df[prefix + 'ddmm'] * 100 + df[prefix + 'ddjj']).apply(str),
+                       format='%Y%m%d')
+    return date
