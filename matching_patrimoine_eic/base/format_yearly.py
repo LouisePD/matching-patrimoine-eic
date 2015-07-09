@@ -3,7 +3,7 @@
 
 @author: l.pauldelvaux
 """
-
+import gc
 import numpy as np
 import pandas as pd
 from format_careers import first_columns_career_table
@@ -22,6 +22,7 @@ def format_unique_year(data, datasets, option=None, table_names=None):
     3 - higher reported wage selected...
     4 - ... associated workstate'''
     careers = data['careers'].copy()
+    assert careers.shape[0] != 0
     data['careers_raw'] = data.pop('careers')
     assert sum(careers.cc.isnull()) == 0
     careers = unique_yearly_unemployment(careers, datasets['unemployment'])
@@ -33,8 +34,8 @@ def format_unique_year(data, datasets, option=None, table_names=None):
     if option and 'complementary' in option.keys() and option['complementary']:
         careers = unique_yearly_b200(careers)
         assert sum(careers.cc.isnull()) == 0
-        assert not(careers.duplicated(['noind', 'source', 'year'])).all()
         careers = update_basic_with_complementary(careers)
+        assert sum(careers.duplicated(['noind', 'source', 'year'])) == 0
         assert sum(careers.cc.isnull()) == 0
         assert careers['cadre'].notnull().any()
         careers = select_avpf_status(careers)
@@ -145,7 +146,6 @@ def unique_yearly_salbrut(table):
             return columns[idx][16:]  # 16 = len(sal_brut_deplaf)
         else:
             return rowl.index(-1)
-    print table.loc[table['cc'].isnull(), :]
     assert sum(table['cc'].isnull()) == 0
 
     df = table.copy()
@@ -170,8 +170,8 @@ def unique_yearly_workstate(table_all, table_yearly_salbrut, datasets):
     # initial_shape = table_yearly_salbrut.shape
     df = table_all
     df.rename(columns={'source': 'source_salbrut'}, inplace=True)
-    df.loc[df['cc'] == 12, 'fp_actif'] = False
-    df.loc[df['cc'] == 13, 'fp_actif'] = True
+    df.loc[df['cc'] == 12, 'fp_actif'] = 0
+    df.loc[df['cc'] == 13, 'fp_actif'] = 1
     assert sum(df['cc'].isnull()) == 0
     dfs = table_yearly_salbrut.copy()
     assert sum(dfs.duplicated(['noind', 'source_salbrut', 'year'])) == 0

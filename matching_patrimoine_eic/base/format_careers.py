@@ -151,13 +151,16 @@ def format_career_dads(name_table, temporary_store = None):
     formated_dads['sal_brut_deplaf'] = clean_earning(formated_dads.loc[:, 'sb'])
     for var in ['full_time', 'unemploy_status', 'inwork_status']:
         formated_dads[var] = np.nan
-    formated_dads['inwork_status'] = True
+    formated_dads['inwork_status'] = 1
     # A: We assume full-time position if missing
-    formated_dads['full_time'] = formated_dads['ce'].isin(['P', 'D', ''])
+    formated_dads['full_time'] = (formated_dads['ce'].isin(['P', 'D', ''])).astype(int)
     formated_dads['cs1'] = formated_dads['cs1'].astype(float)
     formated_dads['cadre'] = formated_dads['cda'].isin(['C']) | formated_dads['cs1'].isin([3.0, 4.0])
     formated_dads.drop(workstate_variables, 1, inplace=True)
-    return formated_dads
+    formated_dads['source'] = name_table
+    formated_dads = formated_dads.sort(['noind', 'start_date'])
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, formated_dads, format='table', data_columns=True, min_itemsize = 20)
 
 
 @temporary_store_decorator()
@@ -166,11 +169,11 @@ def format_career_etat(name_table, temporary_store = None):
     id_variables = ['noind', 'start_date', 'end_date', 'time_unit']
     formated_etat = temporary_store.select(name_table, columns=id_variables + workstate_variables)
     formated_etat['quot'] = formated_etat['quot'].astype(float)
-    formated_etat['sal_brut_deplaf'] = wages_from_etat(data_etat)
+    formated_etat['sal_brut_deplaf'] = clean_earning(formated_etat['sbrut'])
     for var in ['full_time', 'unemploy_status', 'inwork_status', 'fp_actif']:
         formated_etat[var] = np.nan
     cond = formated_etat['quot'].notnull()
-    formated_etat.loc[cond, 'full_time'] = formated_etat.loc[cond, 'quot'].isin([0])
+    formated_etat.loc[cond, 'full_time'] = (formated_etat.loc[cond, 'quot'].isin([0])).astype(int)
     formated_etat.loc[formated_etat['ce'] == 5, 'unemploy_status'] = 2  # chomage indemnisé
     formated_etat.loc[formated_etat['ce'].isin([2, 3, 4]), 'inwork_status'] = True
     formated_etat.loc[formated_etat['ce'].isin([0, 1, 5, 6]), 'inwork_status'] = False
@@ -192,10 +195,13 @@ def format_career_unemployment(data_pe):
         data_pe[var] = np.nan
     for mode, associated_values in equivalence_pjcall2_by_type_all.iteritems():
         data_pe.loc[data_pe['pjcall2'].isin(associated_values), 'unemploy_status'] = mode
-    formated_pe = data_pe[['noind', 'start_date', 'end_date', 'time_unit'] + workstate_variables].copy()
-    formated_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
-    formated_pe['inwork_status'] = False
-    return formated_pe
+    data_pe['sal_brut_deplaf'] = benefits_from_pe(data_pe)
+    data_pe['inwork_status'] = 0
+    data_pe['source'] = name_table
+    data_pe = data_pe.sort(['noind', 'start_date'])
+    data_pe.drop(['pjctaux'], axis=1, inplace = True)
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, data_pe, format='table', data_columns=True, min_itemsize = 20)
 
 
 @temporary_store_decorator()

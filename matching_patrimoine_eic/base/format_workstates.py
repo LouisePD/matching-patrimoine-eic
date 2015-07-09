@@ -18,9 +18,9 @@ def define_workstates(career_table, datasets):
             df[status] = False  # not taken into account yet
     conditions_by_workstate = {2: (df['unemploy_status'] == 2) & (df['source_salbrut'] == datasets['unemployment']),
                                # Unemployed receiving benefits
-                               3: (df['cadre'] == True) * (df['cc'] == 10),
+                               3: (df['cadre'] == 1) * (df['cc'] == 10),
                                # Private sector, executive
-                               4: ((df['cadre'] != True) * (df['regimes_by_year'].str.contains('21.0') == False) *
+                               4: ((df['cadre'] != 1) * (df['regimes_by_year'].str.contains('21.0') == False) *
                                    (df['cc'] == 10)),
                                # Private sector, non-executive (Note: cadre could be NaN)
                                5: (df['cc'] == 13),  # Public sector, actif
@@ -28,7 +28,7 @@ def define_workstates(career_table, datasets):
                                # 5: (df['source_salbrut'] == "12") | (df['cc'] == "12") ,  # Public sector, actif
                                # 6: (df['salbrut_by_year'].str.contains("13")) * (df['cc'] != 10),  # Public sector, sedentaire
                                7: (df['cc'] == 40),  # Self-employed,
-                               8: (df['avpf_status'] == True),  # AVPF
+                               8: (df['avpf_status'] == 1),  # AVPF
                                9: (df['unemploy_status'] == 3) & (df['source_salbrut'] == datasets['unemployment']),
                                # Early retirement
                                10: df['retired'],  # Retirment
