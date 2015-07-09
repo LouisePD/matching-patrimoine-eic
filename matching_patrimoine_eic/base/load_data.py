@@ -127,6 +127,7 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
     close_hdf()
 
 
+def temporary_store_path(file_name_tmp = None):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
     config.readfp(open(config_directory + '//config.ini'))
