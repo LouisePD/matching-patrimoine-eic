@@ -98,6 +98,10 @@ def select_data(data_all, file_description_path, options_selection):
 
     data_careers = data['careers']
     data_careers = select_regimes(data_careers, code_regime_to_import_by_dataset)
+    assert data['individus'].shape[0] !=0
+    del code_regime_to_import_by_dataset
+    gc.collect
+
     data_careers = select_years(data_careers, options_selection_d['first_year'], options_selection_d['last_year'])
     data['careers'] = data_careers
     data = select_generation(data, options_selection_d['first_generation'], options_selection_d['last_generation'])

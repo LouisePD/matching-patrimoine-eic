@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Specific function to format EIC tables
+
 @author: l.pauldelvaux
 """
-
+import gc
 import numpy as np
 import pandas as pd
 from matching_patrimoine_eic.base.format_careers import clean_earning, format_dates_dads, format_dates_unemployment
@@ -82,9 +83,10 @@ def imputation_avpf(data_b200):
     Output: Additional rows (with source = data_b200_AVPF) '''
     workstate_variables = ['st', 'statutp', 'cc']
     avpf_variables = ['avpf', 'ntregc', 'ntregcempl']
-    avpf_b200 = data_b200[['noind', 'start_date', 'end_date', 'time_unit']
-                          + workstate_variables + avpf_variables].copy()
-    avpf_b200 = avpf_b200.loc[(avpf_b200.avpf > 0), :]
+    avpf_b200 = data_b200.loc[(data_b200['avpf'] > 0), ['noind', 'start_date', 'end_date', 'time_unit']
+                                                      + workstate_variables + avpf_variables].copy()
+    del data_b200
+    gc.collect()
     avpf_b200['sal_brut_deplaf'] = clean_earning(avpf_b200.loc[:, 'avpf'])
     avpf_b200['avpf_main'] = (avpf_b200.ntregc - avpf_b200.ntregcempl > avpf_b200.ntregcempl).astype(int)
     avpf_b200['avpf_status'] = 1

@@ -5,8 +5,10 @@ Created on Wed Jun 03 16:43:33 2015
 @author: l.pauldelvaux
 """
 import datetime as dt
+import gc
 import numpy as np
 import pandas as pd
+from load_data import temporary_store_decorator
 
 
 @temporary_store_decorator()
@@ -64,6 +66,8 @@ def additional_rows(table_career, var_value):
         assert df_years.shape[0] == df_type.shape[0]
         to_concat += [df_type]
     df = pd.concat(to_concat, axis=1, join_axes=[df_years.index])
+    del to_concat, table
+    gc.collect()
     df = df.loc[df.value_from_melt.notnull(), :]
     df.drop([var_value, 'year', 'start_date', 'end_date', 'var_value', 'var_year', 'var_start', 'var_end'],
             inplace = True, axis=1)
@@ -78,8 +82,7 @@ def benefits_from_pe(data_pe):
     return benefits
 
 
-def careers_to_year(table):
-    career = table.copy()
+def careers_to_year(career):
     start_date = career.start_date
     end_date = career.end_date
     career['year'] = start_date.apply(lambda x: x.year)
@@ -175,11 +178,17 @@ def format_career_etat(name_table, temporary_store = None):
     cond = formated_etat['quot'].notnull()
     formated_etat.loc[cond, 'full_time'] = (formated_etat.loc[cond, 'quot'].isin([0])).astype(int)
     formated_etat.loc[formated_etat['ce'] == 5, 'unemploy_status'] = 2  # chomage indemnisé
-    formated_etat.loc[formated_etat['ce'].isin([2, 3, 4]), 'inwork_status'] = True
-    formated_etat.loc[formated_etat['ce'].isin([0, 1, 5, 6]), 'inwork_status'] = False
-    formated_etat.loc[formated_etat['rss'] == 8, 'fp_actif'] = True
+    formated_etat.loc[formated_etat['ce'].isin([2, 3, 4]), 'inwork_status'] = 1
+    formated_etat.loc[formated_etat['ce'].isin([0, 1, 5, 6]), 'inwork_status'] = 0
+    formated_etat['fp_actif'] = 0
+    formated_etat.loc[formated_etat['rss'] == 8, 'fp_actif'] = 1
     formated_etat.drop(workstate_variables, 1, inplace=True)
-    return formated_etat
+    formated_etat.loc[(formated_etat.fp_actif == 1), 'cc'] = 13
+    formated_etat.loc[(formated_etat.fp_actif == 0), 'cc'] = 12
+    formated_etat['source'] = name_table
+    formated_etat = formated_etat.sort(['noind', 'start_date'])
+    temporary_store.remove(name_table)
+    temporary_store.put(name_table, formated_etat, format='table', data_columns=True, min_itemsize = 20)
 
 
 def format_career_unemployment(data_pe):
