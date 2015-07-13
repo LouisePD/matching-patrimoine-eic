@@ -5,12 +5,12 @@ Created on 18 may 2015
 '''
 import ConfigParser
 import gc
+import numpy as np
 import pandas as pd
 from pandas import read_stata
 from os import listdir, remove, path
 from os.path import isfile, join
 from numpy import array, unique
-from memory_profiler import profile
 
 
 def clean_dta_filename(file_name):
@@ -24,6 +24,29 @@ def close_hdf():
     for hdf5 in ['hdf5_read', 'hdf5_write', 'hdf5_append']:
         if hdf5 in globals():
             globals()[hdf5].close()
+
+
+def create_hdf5(path_data, file_storage, datasets_to_import):
+    ''' This function import raw datasets in .dta format and stored them in a .hd5
+    (if not already created) '''
+    import_stata = True
+    try:
+        hdf = pd.HDFStore(file_storage)
+        datasets_in_hdf = [dataset[8:] for dataset in hdf.keys()]
+        datasets_to_import = [dataset for dataset in datasets_to_import if dataset not in datasets_in_hdf]
+        if datasets_to_import == []:
+            import_stata = False
+        hdf.close()
+    except:
+        pass
+    if import_stata:
+        print "List of tables to import", datasets_to_import
+        hdf = pd.HDFStore(file_storage)
+        for dataset in datasets_to_import:
+            df = read_stata(path_data + dataset + '.dta').convert_objects()
+            hdf.put('tables/' + dataset, df, format='table', data_columns=True)
+            print(dataset, ' is now stored in HD5 format')
+        hdf.close()
 
 
 def create_hdf5_test(file_storage, file_storage_test, nb_indiv, ref_table):
@@ -55,24 +78,10 @@ def create_hdf5_test(file_storage, file_storage_test, nb_indiv, ref_table):
         hdf.close()
 
 
-def create_hdf5(path_data, file_storage, datasets_to_import):
-    ''' This function import raw datasets in .dta format and stored them in a .hd5
-    (if not already created) '''
-    import_stata = True
-    try:
 def create_hdf5_select(file_storage, file_storage_select, id_selected):
     ''' This function select a subsample of the real dataset '''
     if isfile(file_storage_select):
         hdf = pd.HDFStore(file_storage)
-        datasets_in_hdf = [dataset[8:] for dataset in hdf.keys()]
-        datasets_to_import = [dataset for dataset in datasets_to_import if dataset not in datasets_in_hdf]
-        if datasets_to_import == []:
-            import_stata = False
-        hdf.close()
-    except:
-        pass
-    if import_stata:
-        print "List of tables to import", datasets_to_import
         hdf_select = pd.HDFStore(file_storage_select)
         if hdf.keys() == hdf_select.keys():
             hdf_select.close()
@@ -86,10 +95,11 @@ def create_hdf5_select(file_storage, file_storage_select, id_selected):
     else:
         "We build the corresponding hdf5 file"
         hdf = pd.HDFStore(file_storage)
-        for dataset in datasets_to_import:
-            df = read_stata(path_data + dataset + '.dta').convert_objects()
-            hdf.put('tables/' + dataset, df, format='table', data_columns=True)
-            print(dataset, ' is now stored in HD5 format')
+        hdf_select = pd.HDFStore(file_storage_select, mode = "w", title = "Test file")
+        for dataset in hdf.keys():
+            df = pd.DataFrame(hdf.select(dataset, where = 'noind=' + str(id_selected))).reset_index(drop=True)
+            hdf_select.put(dataset, df, format = 'table', data_columns = True, min_itemsize = 30)
+        hdf_select.close()
         hdf.close()
 
 
@@ -99,6 +109,7 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
     ''' This function loads te different stata tables, save them in a hdf5 file
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
+
     Output: dict(dataset_name = pandas tables)'''
     datasets_to_import = [table for table in datasets_to_import.values()]
     if not path_storage:
@@ -226,11 +237,11 @@ def type_variable_table(table, type_variables):
 
 def type_variable_vect(vect, vtype):
     if vtype == 'Num':
-        return vect.convert_objects(convert_numeric=True).round(2)
+        return vect.convert_objects(convert_numeric=True)
     elif vtype in ['Str', 'Alph']:
         return vect.astype(str)
     elif vtype in ['Int', 'Cat']:
-        return vect.convert_objects(convert_numeric=True).round()
+        return vect.convert_objects(convert_numeric=True)
     else:
         print "Type not taken into account {}".format(vtype)
         return vect
