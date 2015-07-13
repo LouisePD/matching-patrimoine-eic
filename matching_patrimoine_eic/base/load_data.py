@@ -147,6 +147,32 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
     close_hdf()
 
 
+def store_to_hdf(data, path_store):
+    ''' Save a hdf file with all the tables contain in data '''
+    store = pd.HDFStore(path_store, mode = "w", title = "Saved file")
+    for dataset_name, df in data.iteritems():
+        print dataset_name, df.shape
+        df.columns = [str(col) for col in df.columns]
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                try:
+                    df[col] = df[col].astype(float)
+                except:
+                    df[col] = df[col].astype(str)
+        if df.index.name != 'noind':
+            df[['noind']] = df[['noind']].astype(int)
+            df = df.set_index(['noind'])
+        if type(df).__module__ == np.__name__:
+            df = pd.DataFrame(df)
+            store.put(dataset_name, df, format='table', data_columns=True, min_itemsize = 20)
+        elif type(df).__module__ == 'pandas.core.frame':
+            store.put(dataset_name, df, format='table', data_columns=True, min_itemsize = 20)
+        else:
+            # TODO
+            store.put(dataset_name, df, format='table', data_columns=True, min_itemsize = 20)
+    store.close()
+
+
 def temporary_store_path(file_name_tmp = None):
     config_directory = path.normpath(path.join(path.dirname(__file__), '..', '..'))
     config = ConfigParser.ConfigParser()
