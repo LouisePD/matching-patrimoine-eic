@@ -44,23 +44,23 @@ def correction_carriere(ind):
     ind['cydeb1'] = ind['prodep']
     liste1 = [6723, 7137, 10641, 21847, 30072, 31545, 33382]
     liste1 = [x - 1 for x in liste1]
-    ind['cydeb1'][liste1] = ind.anais[liste1] + 20
-    ind['cydeb1'][15206] = 1963
-    ind['cydeb1'][27800] = 1999
+    ind.iloc[liste1, 'cydeb1'] = ind.loc[liste1, 'anais'] + 20
+    ind.iloc[15206, 'cydeb1'] = 1963
+    ind.iloc[27800, 'cydeb1'] = 1999
     ind['modif'] = ""
-    ind['modif'].iloc[liste1 + [15206, 27800]] = "cydeb1_manq"
+    ind.iloc[liste1 + [15206, 27800], 'modif'] = "cydeb1_manq"
 
-    ind['cyact3'][10833] = 4
-    ind['cyact2'][23584] = 11
-    ind['cyact3'][27816] = 5
-    ind['modif'].iloc[[10833, 23584, 27816]] = "cyact manq"
+    ind.iloc[10833, 'cyact3'] = 4
+    ind.iloc[23584, 'cyact2'] = 11
+    ind.iloc[27816, 'cyact3'] = 5
+    ind.iloc[[10833, 23584, 27816], 'modif'] = "cyact manq"
     var = ["cyact", "cydeb", "cycaus", "cytpto"]
     # Note : la solution ne semble pas être parfaite au sens qu'elle ne résout pas tout
     # cond : gens pour qui on a un probleme de date
     cond0 = (ind['cyact2'].notnull()) & (ind['cyact1'].isnull()) & \
     ((ind['cydeb1'] == ind['cydeb2']) | (ind['cydeb1'] > ind['cydeb2']) | (ind['cydeb1'] == (ind['cydeb2'] - 1)))
     cond0.iloc[8297] = True
-    ind['modif'][cond0] = "decal act"
+    ind.loc[cond0, 'modif'] = "decal act"
     # on decale tout de 1 à gauche en espérant que ça résout le problème
     for k in range(1, 16):
         var_k = [x + str(k) for x in var]

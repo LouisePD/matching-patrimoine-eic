@@ -60,6 +60,9 @@ def create_hdf5(path_data, file_storage, datasets_to_import):
     (if not already created) '''
     import_stata = True
     try:
+def create_hdf5_select(file_storage, file_storage_select, id_selected):
+    ''' This function select a subsample of the real dataset '''
+    if isfile(file_storage_select):
         hdf = pd.HDFStore(file_storage)
         datasets_in_hdf = [dataset[8:] for dataset in hdf.keys()]
         datasets_to_import = [dataset for dataset in datasets_to_import if dataset not in datasets_in_hdf]
@@ -70,6 +73,18 @@ def create_hdf5(path_data, file_storage, datasets_to_import):
         pass
     if import_stata:
         print "List of tables to import", datasets_to_import
+        hdf_select = pd.HDFStore(file_storage_select)
+        if hdf.keys() == hdf_select.keys():
+            hdf_select.close()
+            hdf.close()
+            pass
+        else:
+            hdf_select.close()
+            hdf.close()
+            remove(file_storage_select)
+            create_hdf5_select(file_storage, file_storage_select, id_selected)
+    else:
+        "We build the corresponding hdf5 file"
         hdf = pd.HDFStore(file_storage)
         for dataset in datasets_to_import:
             df = read_stata(path_data + dataset + '.dta').convert_objects()
@@ -80,7 +95,7 @@ def create_hdf5(path_data, file_storage, datasets_to_import):
 
 # @profile(precision=4)
 def load_data(path_data, path_storage=None, hdf_name=None, file_description_path=None,
-              datasets_to_import=None, test=False, nb_indiv=400, ref_table=None):
+              datasets_to_import=None, test=False, nb_indiv=400, ref_table=None, id_selected=None):
     ''' This function loads te different stata tables, save them in a hdf5 file
     (if not already existing). If file_description is specified,
     only a subset of variables is kept (refering to file_description).
@@ -96,7 +111,12 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
         hdf_name = 'storage'
     storage_file = path_storage + hdf_name + '.h5'
     create_hdf5(path_data, storage_file, datasets_to_import)
-    if test:
+    if id_selected:
+        print "We use a subsample of the extensive dataset with selected individuals"
+        storage_select_file = path_storage + hdf_name + '_selected.h5'
+        create_hdf5_select(storage_file, storage_select_file, id_selected)
+        hdf = pd.HDFStore(storage_select_file)
+    elif test:
         print "We use a subsample of the extensive dataset with {} individuals (randomly selected)".format(nb_indiv)
         storage_test_file = path_storage + hdf_name + '_test.h5'
         create_hdf5_test(storage_file, storage_test_file, nb_indiv, ref_table)
