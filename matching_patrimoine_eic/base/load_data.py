@@ -72,7 +72,7 @@ def create_hdf5_test(file_storage, file_storage_test, nb_indiv, ref_table):
             ref_table = hdf.keys()[0]
         selected_index = sample(unique(array(hdf.select('tables/' + ref_table, columns = ['noind']))), nb_indiv)
         for dataset in hdf.keys():
-            df = pd.DataFrame(hdf.select(dataset, where = 'noind=' + str(selected_index))).reset_index(drop=True)
+            df = pd.DataFrame(hdf.select(dataset, where = 'noind =' + str(selected_index))).reset_index(drop=True)
             hdf_test.put(dataset, df, format = 'table', data_columns = True, min_itemsize = 30)
         hdf_test.close()
         hdf.close()
@@ -83,7 +83,13 @@ def create_hdf5_select(file_storage, file_storage_select, id_selected):
     if isfile(file_storage_select):
         hdf = pd.HDFStore(file_storage)
         hdf_select = pd.HDFStore(file_storage_select)
-        if hdf.keys() == hdf_select.keys():
+        try:
+            same_keys = (hdf.keys() == hdf_select.keys())
+            same_noind = ([(noind in hdf_select.values()[0]['noind']) for noind in id_selected]).all()
+            no_reload = same_keys * same_noind
+        except:
+            no_reload = False
+        if no_reload:
             hdf_select.close()
             hdf.close()
             pass
@@ -144,14 +150,15 @@ def load_data(path_data, path_storage=None, hdf_name=None, file_description_path
         selection_to_import = False
     temp_file_path = temporary_store_path()
     temp = pd.HDFStore(temp_file_path, mode = "w", title = "Temporary file")
-    for dataset in datasets_to_import:
+    for dataset in hdf.keys():
+        dataset_name = dataset[8:]
         if selection_to_import:
-            type_variables = variables_to_import_by_dataset[dataset]
-            df = hdf.select('/tables/' + dataset, columns=type_variables.keys())
+            type_variables = variables_to_import_by_dataset[dataset_name]
+            df = hdf.select(dataset, columns=type_variables.keys())
             df = type_variable_table(df, type_variables)
         else:
-            df = hdf.select('/tables/' + dataset)
-        temp.put(dataset, df, format='table', data_columns=True, min_itemsize = 20)
+            df = hdf.select(dataset)
+        temp.put(dataset_name, df, format='table', data_columns=True, min_itemsize = 20)
     print "Raw datasets are now loaded with the following tables: \n", datasets_to_import
     temp.close()
     hdf.close()
@@ -162,7 +169,6 @@ def store_to_hdf(data, path_store):
     ''' Save a hdf file with all the tables contain in data '''
     store = pd.HDFStore(path_store, mode = "w", title = "Saved file")
     for dataset_name, df in data.iteritems():
-        print dataset_name, df.shape
         df.columns = [str(col) for col in df.columns]
         for col in df.columns:
             if df[col].dtype == 'object':
