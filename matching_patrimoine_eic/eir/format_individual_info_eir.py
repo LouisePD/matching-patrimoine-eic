@@ -10,7 +10,7 @@ from matching_patrimoine_eic.base.load_data import temporary_store_decorator
 
 
 @temporary_store_decorator()
-def build_anaiss(index, temporary_store = None):
+def build_anaiss(temporary_store = None):
     ''' Returns a length(index)-vector of years of birth
     - collected from: b100 (check with c100)
     - code: 0 = Male / 1 = female '''
@@ -20,7 +20,7 @@ def build_anaiss(index, temporary_store = None):
 
 
 @temporary_store_decorator()
-def build_civilstate(index, temporary_store = None):
+def build_civilstate(temporary_store = None):
     ''' Returns a length(index)-vector of civilstate:
     - collected from:
     - code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
@@ -31,7 +31,7 @@ def build_civilstate(index, temporary_store = None):
 
 
 @temporary_store_decorator()
-def build_nenf(index, temporary_store = None):
+def build_nenf(temporary_store = None):
     ''' Returns a length(index)-vector of number of children
     Information is often missing so we use information provided from 3 variables'''
     df = temporary_store.select('eir2008_avant08', columns=['noind', 'nre', 'nrelev', 'nrecharge'])
@@ -45,7 +45,7 @@ def build_nenf(index, temporary_store = None):
 
 
 @temporary_store_decorator()
-def build_sexe(index, temporary_store = None):
+def build_sexe(temporary_store = None):
     ''' Returns a length(index)-vector of sexes
     - collected from: b100 (eventual add  with c100)
     - code: 0 = Male / 1 = female (initial code is 1/2)'''
@@ -89,19 +89,35 @@ def format_individual_info(temporary_store = None):
     columns = ['sexe', 'anaiss', 'nenf', 'civilstate']  # , 'findet']
     info_ind = pd.DataFrame(columns = columns, index = index)
     for variable_name in columns:
-        info_ind[variable_name] = eval('build_' + variable_name)(index)
+        info_ind[variable_name] = eval('build_' + variable_name)()
     info_ind['noind'] = index
     return info_ind
 
 
 @temporary_store_decorator()
-def format_pension_info(temporary_store = None):
+def format_pension_info(droit_direct = True, temporary_store = None):
+
+    def fillna_by_noind(x):
+        null_col = list(x.isnull())
+        index = list(x.index)
+        i_valid = null_col.index(0) if 0 in null_col else 0
+        return x.fillna(x[index[i_valid]])
+
     df = temporary_store.select('eir2008_avant08')
-    columns_to_keep = ['noind', 'cc', 'date_liquidation', 'date_jouissance']
-    df['cc'] = df['cc'].astype(float)
+    columns_to_keep = ['noind', 'cc', 'date_liquidation', 'date_jouissance', 'age_retraite']
+    df.loc[:, 'cc'] = df['cc'].astype(float)
     assert sum(df['cc'].isnull()) == 0
-    df['date_liquidation'] = build_date_pension(df, 'liq')
-    df['date_jouissance'] = build_date_pension(df, 'ent')
+    df.loc[:, 'date_liquidation'] = build_date_pension(df, 'liq')
+    df.loc[:, 'date_jouissance'] = build_date_pension(df, 'ent')
+    print df.loc[df['date_liquidation'].isnull() * df['date_jouissance'].isnull(), ['noind', 'an', 'cc', 'typdd']]
+    if droit_direct:
+        df = df.loc[~df['typdd'].isnull(), :]
+        assert sum(df['date_liquidation'].isnull() * df['date_jouissance'].isnull()) == 0
+    df.loc[df['date_liquidation'].isnull(), 'date_liquidation'] = \
+        df.loc[df['date_liquidation'].isnull(), 'date_jouissance']
+    df.loc[df['date_jouissance'].isnull(), 'date_jouissance'] = \
+        df.loc[df['date_jouissance'].isnull(), 'date_liquidation']
+    df.loc[:, 'age_retraite'] = df.loc[:, 'date_liquidation'].apply(lambda x: x.year) - df.loc[:, 'an']
     to_rename = {1: 'direct', 2: 'derive', 3: 'conj_charge', 4: 'tierce', 5: 'bonif_enf', 6: 'fsv', 7: '814',
                  8: 'aspa', 9: 'enf_c', 10: 'nbi', 11: 'other'}
 
@@ -109,8 +125,20 @@ def format_pension_info(temporary_store = None):
         name = 'pension_' + to_rename[i]
         df[name] = clean_earning(df['m' + str(i)])
         columns_to_keep += [name]
+
+    df = df.rename(columns={'majomindd': 'pension_mini', 'tdd1': 'trim_tot', 'tdd2': 'trim_cot'})
     df['pension_tot'] = clean_earning(df['mont'])
-    columns_to_keep += ['pension_tot']
+    vars_enf = ['nrelev', 'nrecharge']
+    for var in vars_enf:
+        df.loc[:, var] = df.groupby('noind')[var].transform(fillna_by_noind)
+        df.loc[df['nre'].isnull(), 'nre'] = df.loc[df['nre'].isnull(), var]
+
+    df.loc[:, 'nre'] = df.groupby('noind')['nre'].transform(fillna_by_noind).fillna(0)
+    df.rename(columns={'nre': 'nenf'}, inplace=True)
+    print df.columns
+    columns_to_keep += ['pension_tot', 'nenf', 'pension_mini', 'taux_avantmico',
+                        'taux_surcote', 'sam', 'trim_tot', 'trim_cot', 'trimsur', 'trimdec', 'typdd']
+
     return df[columns_to_keep]
 
 
