@@ -120,11 +120,12 @@ def career_table_by_time_unit(careers, time_unit='year'):
         careers = regimes_by_year(careers)
         return careers
 
+
 def clean_earning(vec):
     vec.loc[vec == -1] = np.nan
     opposite = - vec.loc[vec < 0].copy()
     vec.loc[vec < 0] = opposite
-    return np.round(vec, 2)
+    return vec
 
 
 def crosstable_imputation(data, initial_variable, aggregated_variable):
@@ -158,7 +159,7 @@ def format_career_dads(name_table, temporary_store = None):
     # A: We assume full-time position if missing
     formated_dads['full_time'] = (formated_dads['ce'].isin(['P', 'D', ''])).astype(int)
     formated_dads['cs1'] = formated_dads['cs1'].astype(float)
-    formated_dads['cadre'] = formated_dads['cda'].isin(['C']) | formated_dads['cs1'].isin([3.0, 4.0])
+    formated_dads['cadre'] = (formated_dads['cda'].isin(['C']) | formated_dads['cs1'].isin([3.0, 4.0])).astype(int)
     formated_dads.drop(workstate_variables, 1, inplace=True)
     formated_dads['source'] = name_table
     formated_dads = formated_dads.sort(['noind', 'start_date'])

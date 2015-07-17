@@ -11,7 +11,7 @@ def clean_civilstate_level100(x):
     ''' This function cleans civilstate statuts for 'b100' and 'c100' databases
     initial code: 1==single, 2==married, 3==widow, 4==divorced or separated,
     output code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
-    x = x.convert_objects(convert_numeric=True).round()
+    x = x.convert_objects(convert_numeric=True)
     x.loc[x == 8] = np.nan
     x = x.replace([1, 2, 3, 4],
                   [2, 1, 4, 3])
@@ -23,7 +23,7 @@ def clean_civilstate_etat(x):
     initial code: 1==single, 2==married, 3==widow, 4==widow, 5==divorced or separated,
     6==pacs, 7==En concubinage
     output code: married == 1, single == 2, divorced  == 3, widow == 4, pacs == 5, couple == 6'''
-    x = x.convert_objects(convert_numeric=True).round()
+    x = x.convert_objects(convert_numeric=True)
     x.loc[x == 9] = np.nan
     x = x.replace([1, 2, 3, 4, 5, 6, 7],
                   [2, 1, 4, 4, 3, 5, 6])
@@ -76,7 +76,7 @@ def nenf_from_edp(table_edp):
 
 
 @temporary_store_decorator()
-def variable_last_available(var_name_by_table, temporary_store = None):
+def variable_last_available(var_name_by_table, var_name = None, temporary_store = None):
     ''' This function returns the last available information across all datasets
     var_nama_by_table: {table_name: {names: [targeted_variable_name, year_variable_name],
                                      order: integer} }'''
@@ -87,11 +87,11 @@ def variable_last_available(var_name_by_table, temporary_store = None):
         table = temporary_store.select(table_name, columns=[['noind'] + var_names])
         table.rename(columns={var_names[0]: 'variable', var_names[1]: 'year'}, inplace=True)
         table.set_index(table.noind, inplace=True)
-
         table = table.loc[table['variable'].notnull(), :].sort('year')
         table['order'] = order
         tables_to_concat += [table]
     temporary_store.close()
-    result = pd.concat(tables_to_concat, axis=0, ignore_index=True).sort(['noind', 'year', 'order'])
+    result = pd.concat(tables_to_concat, ignore_index = True).sort(['noind', 'year', 'order'])
     result = result.drop_duplicates(['noind'])
+    result.set_index(table.noind, inplace=True)
     return result['variable']

@@ -58,7 +58,7 @@ def format_unique_year(data, datasets, option=None, table_names=None):
 def select_avpf_status(table):
     ''' Select avpf status when conflict when an inwork status in the same year '''
     table = unique_yearly_avpf(table)
-    table['source_nb'] = table.groupby(['noind', 'year'])['noind'].transform(lambda x: len(x))
+    table['source_nb'] = table.groupby(['noind', 'year'])['noind'].transform('count')
     avpf = table.loc[table['source'].isin(['b200_09', 'b200_avpf_09']), :].copy()
     notavpf = table.loc[~table['source'].isin(['b200_09', 'b200_avpf_09']), :].copy()
     avpf = avpf.sort(['noind', 'year', 'sal_brut_deplaf']).drop_duplicates(['noind', 'year'], take_last=True)
@@ -69,7 +69,7 @@ def select_avpf_status(table):
 def unique_yearly_avpf(table):
     not_avpf = table.loc[table.source != 'b200_avpf_09', :].copy()
     avpf = table.loc[table.source == 'b200_avpf_09', :].copy()
-    avpf['cc'] = avpf['cc'].astype(float)
+    avpf.loc[:, 'cc'] = avpf['cc'].astype(float)
     avpf = avpf.sort(['noind', 'year', 'sal_brut_deplaf']).drop_duplicates(['noind', 'year'], take_last=True)
     return pd.concat([avpf, not_avpf], ignore_index=True)
 
@@ -77,8 +77,8 @@ def unique_yearly_avpf(table):
 def unique_yearly_etat(table, etat_table_name):
     not_etat = table.loc[table.source != etat_table_name, :]
     etat = table.loc[table.source == etat_table_name, :]
-    etat['cc'] = etat['cc'].astype(float)
-    etat['sal_brut_deplaf_cum'] = etat.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
+    etat.loc[:, 'cc'] = etat['cc'].astype(float)
+    etat.loc[:, 'sal_brut_deplaf_cum'] = etat.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
     etat = etat.sort(['noind', 'year', 'nb_month']).drop_duplicates(['noind', 'year'], take_last=True)
     # etat.rename(columns={'sal_brut_deplaf_cum': 'sal_brut_deplaf'}, inplace=True)
     return pd.concat([etat, not_etat], ignore_index=True)
@@ -90,7 +90,7 @@ def unique_yearly_b200(table):
     Selection rule: keep the 'most important' scheme (RG)'''
     not_b200 = table.loc[table.source != 'b200_09', :]
     b200 = table.loc[table.source == 'b200_09', :]
-    b200['cc'] = b200['cc'].astype(float)
+    b200.loc[:, 'cc'] = b200['cc'].astype(float)
     b200 = b200.sort(['noind', 'year', 'cc']).drop_duplicates(['noind', 'year'])
     assert sum(table.cc.isnull()) == 0
     return pd.concat([b200, not_b200], ignore_index=True)
@@ -102,8 +102,8 @@ def unique_yearly_dads(table, dads_table_name):
     Selection rule: sum wages over year and keep status of the longest period.'''
     not_dads = table.loc[table.source != dads_table_name, :]
     dads = table.loc[table.source == dads_table_name, :]
-    dads['nb_month'] = (dads['end_date'] - dads['start_date']) / np.timedelta64(1, 'M')
-    dads['sal_brut_deplaf_cum'] = dads.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
+    dads.loc[:, 'nb_month'] = (dads['end_date'] - dads['start_date']) / np.timedelta64(1, 'M')
+    dads.loc[:, 'sal_brut_deplaf_cum'] = dads.groupby(['noind', 'year'])['sal_brut_deplaf'].transform(cumsum_na)
     dads = dads.sort(['noind', 'year', 'nb_month']).drop_duplicates(['noind', 'year'], take_last=True)
     return pd.concat([not_dads, dads], ignore_index=True)
 
@@ -118,7 +118,7 @@ def unique_yearly_unemployment(table, unemploy_table_name):
     pe.loc[to_impute * (pe['sal_brut_deplaf'] > 0), 'unemploy_status'] = 2
     pe.loc[to_impute * (pe['sal_brut_deplaf'] == 0), 'unemploy_status'] = 0
     assert sum(pe['unemploy_status'].isnull()) == 0
-    pe['nb_month'] = (pe['end_date'] - pe['start_date']) / np.timedelta64(1, 'M')
+    pe.loc[:, 'nb_month'] = (pe['end_date'] - pe['start_date']) / np.timedelta64(1, 'M')
     pe_yearly = pe.groupby(['noind', 'year', 'unemploy_status'])['nb_month'].sum()
     pe_yearly = pe_yearly.unstack('unemploy_status').stack('unemploy_status').reset_index()
     pe_yearly.columns = ['noind', 'year', 'unemploy_status', 'nb_months']
@@ -148,18 +148,21 @@ def unique_yearly_salbrut(table):
             return rowl.index(-1)
     assert sum(table['cc'].isnull()) == 0
 
-    df = table.copy()
-    df['year'] = df['year'].astype(int)
+    df = table
+    df.loc[:, 'year'] = df['year'].astype(int)
     assert not(df.duplicated(['noind', 'year', 'source'])).all()
-    df['sal_brut_deplaf'] = df['sal_brut_deplaf'].fillna(-1)
+    df.loc[:, 'sal_brut_deplaf'] = df['sal_brut_deplaf'].fillna(-1)
     # Assumption: Here, we only select the highest wage for a given year
     dfs = df[['noind', 'year', 'source', 'sal_brut_deplaf']].drop_duplicates(
         ['noind', 'year', 'source'], take_last=True).set_index(['noind', 'year', 'source']).unstack('source')
-    dfs['salbrut'] = dfs.max(axis=1).fillna(-1)
+    del df
+    gc.collect()
+    dfs['salbrut'] = dfs.max(axis=1)
     cols = [str(col[0]) + '_' + str(col[1]) for col in dfs.columns if col[0] != 'salbrut']
     dfs.columns = cols + ['salbrut']
     dfs = dfs.reset_index()
-    dfs['source_salbrut'] = dfs.apply(lambda row: _source(row[cols], cols), axis=1)
+    dfs.loc[:, 'source_salbrut'] = dfs.apply(lambda row: _source(row[cols], cols), axis=1)
+    dfs.loc[:, 'salbrut'] = dfs['salbrut'].replace(-1, np.nan)
     assert not(dfs['source_salbrut'].isnull()).all()
     assert not(dfs.duplicated(['noind', 'source_salbrut', 'year'])).all()
     return dfs[['noind', 'year', 'salbrut', 'source_salbrut']].sort(['noind', 'year'])
@@ -193,19 +196,22 @@ def update_basic_with_complementary(table):
     ''' Extract information from complementary schemes and save it at the basic level '''
     assert 'b200_09' in list(table['source'])
     assert 'c200_09' in list(table['source'])
-    table['cc'] = table['cc'].astype(float)
+    table.loc[:, 'cc'] = table['cc'].astype(float)
     table_c200 = table.loc[(table['source'] == 'c200_09') * (table['cc'].isin([5000.0, 6000.0])), :]
     renames = dict([(old_name, old_name + '_c200') for old_name in table_c200.columns
                     if old_name not in ['noind', 'year']])
     table_c200.rename(columns=renames, inplace=True)
-    table_c200['source_to_match'] = 'b200_09'
-    table_c200['cc_to_match'] = 10.0
+    table_c200.loc[:, 'source_to_match'] = 'b200_09'
+    table_c200.loc[:, 'cc_to_match'] = 10.0
     # If both Agirc (5000) and Arcco (6000) on a same year -> we keep agirc
     table_c200 = table_c200.sort(['noind', 'year', 'cc_c200'])
     table_c200 = table_c200.drop_duplicates(['noind', 'year'])  # First = Agirc
     table = table.loc[table.source != 'c200_09', :]
     table = pd.merge(table, table_c200, left_on=['noind', 'year', 'cc'],
                      right_on=['noind', 'year', 'cc_to_match'], how='left', sort=False)
+
+    del table_c200
+    gc.collect()
     for var in ['cc', 'cc_c200']:
         table[var] = table[var].astype(float)
     rows_to_impute = table['sal_brut_deplaf'].isnull() | (table['sal_brut_deplaf_c200'] > table['sal_brut_deplaf'])

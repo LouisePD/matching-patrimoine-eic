@@ -85,6 +85,8 @@ def format_individual_info(temporary_store = None):
     When incoherent information a rule of prioritarisation is defined
     Note: People we want information on = people in b100/b200. '''
     indiv = temporary_store.select('b100_09')['noind']
+    ath_fp = temporary_store.select('etat_09')[['ath', 'noind', 'annee']].sort(['noind',
+                                                             'annee']).drop_duplicates('noind', take_last = True)
     index = sorted(set(indiv))
     temporary_store.close()
     columns = ['sexe', 'anaiss', 'nenf', 'civilstate']  # , 'findet']
@@ -94,11 +96,13 @@ def format_individual_info(temporary_store = None):
             info_ind[variable_name] = eval('build_' + variable_name)(index)
         except:
             info_ind[variable_name] =  -1
-    info_ind['noind'] = info_ind.index
+    info_ind.loc[:, 'noind'] = info_ind.index
     assert info_ind.shape[0] > 1
     assert sum(info_ind['sexe'].isnull()) == 0
-    info_ind['nenf'] = info_ind['nenf'].fillna(0)
+    info_ind.loc[:, 'nenf'] = info_ind['nenf'].fillna(0)
     assert info_ind['civilstate'].notnull().any()
+    # ATH pour calculer le salaire de référence de la FP
+    info_ind = info_ind.merge(ath_fp[['noind', 'ath']].fillna(1), on='noind', how= 'left')
     return info_ind
 
 
