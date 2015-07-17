@@ -11,7 +11,7 @@ from format_careers_eic import format_career_tables, format_dates, imputation_cc
 from format_individual_info_eic import format_individual_info
 from matching_patrimoine_eic.base.format_careers import aggregate_career_table, career_table_by_time_unit
 from matching_patrimoine_eic.base.format_yearly import format_unique_year
-from matching_patrimoine_eic.base.load_data import load_data
+from matching_patrimoine_eic.base.load_data import load_data, store_to_hdf
 from matching_patrimoine_eic.base.select_data import select_data, select_generation_before_format
 from matching_patrimoine_eic.base.stat_describe import describe_individual_info, describe_missing
 # from memory_profiler import profile
@@ -71,6 +71,8 @@ def build_eic_data(test=False, describe=False, options_selection=dict()):
     data = import_data(path_data, path_storage, datasets, file_description_path,
                        options_selection, test=test, describe=describe)
     data = format_unique_year(data, datasets, option={'complementary': True})
+    file_storage_path = path_storage + 'final_eic.h5'
+    store_to_hdf(data,file_storage_path)
     return data
 
 if __name__ == '__main__':
